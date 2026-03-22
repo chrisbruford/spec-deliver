@@ -1,0 +1,13 @@
+specs (
+    {
+        name openspec
+        prefix r
+        include (
+            openspec/specs/**/*.md
+            openspec/changes/*/specs/**/*.md
+        )
+        impls (
+            {{IMPLS}}
+        )
+    }
+)
