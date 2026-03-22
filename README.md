@@ -22,16 +22,41 @@ You describe what you want to build. The plugin:
 
 ## Installation
 
-```bash
-# Install the plugin
-/plugin install spec-deliver
+### First-time setup (once per device)
 
-# Run device setup (installs OpenSpec, verifies PATH)
-# Then in Claude Code:
-bash ~/.claude/plugins/cache/.../spec-deliver/scripts/setup.sh
+```bash
+# 1. Add the repo as a plugin marketplace
+/plugin marketplace add chrisbruford/spec-deliver
+
+# 2. Install the plugin (user scope = available in all projects)
+/plugin install spec-deliver --scope user
+
+# 3. Install OpenSpec and verify dependencies
+# In Claude Code, ask: "run the spec-deliver setup script"
+# Or manually:
+bash ~/.claude/plugins/cache/spec-deliver/spec-deliver/scripts/setup.sh
 ```
 
-## Project Setup
+### Also required
+
+```bash
+# Install the Ralph Loop plugin (if not already installed)
+/plugin install ralph-loop@claude-plugins-official --scope user
+```
+
+### Per-project setup (for team repos)
+
+Add to your project's `.claude/settings.json` so the plugin is enabled for all contributors:
+
+```json
+{
+  "enabledPlugins": {
+    "spec-deliver@spec-deliver": true
+  }
+}
+```
+
+### Project bootstrap
 
 In each repo, run once:
 
@@ -39,8 +64,9 @@ In each repo, run once:
 /spec-deliver:init
 ```
 
-This creates:
+This detects your tech stack and creates:
 - `openspec/` — OpenSpec directory with the Tracey-integrated schema
+- `openspec/config.yaml` — Project context and Tracey rules
 - `.config/tracey/config.styx` — Tracey configuration pointing at specs
 
 ## Usage
