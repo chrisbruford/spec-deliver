@@ -1,7 +1,11 @@
 {
   "name": "spec-deliver",
-  "description": "Spec-driven autonomous delivery: OpenSpec + Tracey traceability + Ralph loop. Orchestrates explore → propose → review → deliver → verify → archive.",
+  "version": "1.0.0",
+  "description": "Spec-driven autonomous delivery: OpenSpec + Tracey traceability + Ralph loop. Orchestrates explore, propose, review, deliver, verify, archive.",
   "author": {
-    "name": "spec-deliver"
-  }
+    "name": "Chris Bruford"
+  },
+  "homepage": "https://github.com/chrisbruford/spec-deliver",
+  "repository": "https://github.com/chrisbruford/spec-deliver",
+  "license": "MIT"
 }
