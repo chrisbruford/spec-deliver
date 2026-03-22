@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "spec-deliver-claude-plugin",
+  "description": "Spec-driven autonomous delivery: OpenSpec + Tracey traceability + Ralph loop",
+  "owner": {
+    "name": "Chris Bruford"
+  },
+  "plugins": [
+    {
+      "name": "spec-deliver",
+      "description": "Orchestrate spec-driven autonomous delivery: explore, propose, review, deliver, verify, archive",
+      "source": ".",
+      "category": "development"
+    }
+  ]
+}
