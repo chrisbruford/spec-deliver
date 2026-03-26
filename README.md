@@ -17,7 +17,7 @@ You describe what you want to build. The plugin:
 
 - [Claude Code](https://claude.com/claude-code) with plugin support
 - [Ralph Loop plugin](https://github.com/anthropics/claude-plugins-official) — `ralph-loop@claude-plugins-official`
-- [Tracey](https://github.com/nicholasgasior/tracey) MCP server configured
+- [Tracey](https://github.com/bearcove/tracey) MCP server configured
 - Node.js 20+
 
 ## Installation
