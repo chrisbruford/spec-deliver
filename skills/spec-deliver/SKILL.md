@@ -1,5 +1,4 @@
 ---
-name: spec-deliver
 description: "Orchestrate spec-driven autonomous delivery using OpenSpec, Tracey traceability, and Ralph loop. Use when the user wants to build a feature from an idea through to a PR with full requirement traceability. Detects when a project has openspec/ and .config/tracey/ directories."
 argument-hint: "<idea or change-name> [--max-iterations N] [--skip-explore]"
 ---

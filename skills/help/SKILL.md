@@ -1,5 +1,4 @@
 ---
-name: help
 description: "Show help for the spec-deliver plugin"
 ---
 

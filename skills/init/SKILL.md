@@ -1,5 +1,4 @@
 ---
-name: init
 description: "Initialize a project for spec-driven delivery with OpenSpec + Tracey"
 argument-hint: "[--tech-stack \"TypeScript, C#\"]"
 ---

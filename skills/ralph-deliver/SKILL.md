@@ -1,5 +1,4 @@
 ---
-name: ralph-deliver
 description: "Assemble a Tracey-aware prompt from OpenSpec artifacts and launch a Ralph loop for autonomous delivery"
 argument-hint: "<change-name> [--max-iterations N]"
 ---
