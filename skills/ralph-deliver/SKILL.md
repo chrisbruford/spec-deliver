@@ -1,5 +1,5 @@
 ---
-name: "Ralph Deliver"
+name: ralph-deliver
 description: "Assemble a Tracey-aware prompt from OpenSpec artifacts and launch a Ralph loop for autonomous delivery"
 argument-hint: "<change-name> [--max-iterations N]"
 ---
@@ -7,7 +7,7 @@ argument-hint: "<change-name> [--max-iterations N]"
 # Ralph Deliver
 
 Assemble a Tracey-aware Ralph loop prompt from OpenSpec change artifacts and launch autonomous delivery.
-This command can be used standalone or is called by `/spec-deliver` during Phase 4.
+This skill can be used standalone or is called by `/spec-deliver:spec-deliver` during Phase 4.
 
 ## Steps
 
@@ -18,7 +18,7 @@ This command can be used standalone or is called by `/spec-deliver` during Phase
      ```bash
      openspec list 2>/dev/null
      ```
-     Then say: "Usage: `/ralph-deliver <change-name> [--max-iterations N]`" showing the available changes, and stop.
+     Then say: "Usage: `/spec-deliver:ralph-deliver <change-name> [--max-iterations N]`" showing the available changes, and stop.
 
 2. **Verify the change exists and is ready**:
    ```bash
@@ -162,4 +162,4 @@ After the Ralph loop completes (or hits max iterations):
 2. Run `tracey_uncovered` to list any remaining gaps
 3. Suggest next steps:
    - If complete: "Run `/opsx:verify` to validate, then `/opsx:archive` to archive."
-   - If incomplete: "N requirements still uncovered. Review gaps and consider another `/ralph-deliver` pass or manual implementation."
+   - If incomplete: "N requirements still uncovered. Review gaps and consider another `/spec-deliver:ralph-deliver` pass or manual implementation."

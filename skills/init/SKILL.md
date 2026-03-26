@@ -1,5 +1,5 @@
 ---
-name: "Spec Deliver: Init"
+name: init
 description: "Initialize a project for spec-driven delivery with OpenSpec + Tracey"
 argument-hint: "[--tech-stack \"TypeScript, C#\"]"
 ---
@@ -138,6 +138,6 @@ Tracey-integrated custom schema and creates the Tracey configuration.
     - .config/tracey/config.styx
 
     ### Next steps
-    - Run `/spec-deliver "your idea"` to start your first feature
+    - Run `/spec-deliver:spec-deliver "your idea"` to start your first feature
     - Or run `/opsx:explore "topic"` to investigate first
     ```
