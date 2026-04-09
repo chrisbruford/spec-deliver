@@ -54,8 +54,9 @@ This skill can be used standalone or is called by `/spec-deliver:spec-deliver` d
    ```markdown
    # Task: Implement <change-name>
 
-   You are implementing an OpenSpec change. Work through the tasks below, writing
-   production code and tests. Follow TDD: write a failing test, make it pass, refactor.
+   You are implementing an OpenSpec change. Your job is to create an agent team
+   to deliver this work. Analyse the tasks, specs, and design below, then create
+   an appropriate agent team to implement the change in parallel.
 
    ## Project Context
 
@@ -81,9 +82,15 @@ This skill can be used standalone or is called by `/spec-deliver:spec-deliver` d
 
    <contents of tasks.md>
 
-   ## Implementation Rules
+   ## Delivery Instructions
 
-   1. Work through tasks in order. After completing each task, check it off in
+   Create an agent team to implement the tasks above. You decide the team
+   composition based on the nature of the work — the number of teammates,
+   their roles, and how to divide the work.
+
+   Each teammate must follow these rules:
+
+   1. After completing each task, check it off in
       openspec/changes/<change-name>/tasks.md by changing `- [ ]` to `- [x]`.
 
    2. **Tracey annotations are MANDATORY**:
@@ -95,13 +102,14 @@ This skill can be used standalone or is called by `/spec-deliver:spec-deliver` d
       a. Write a failing test with `r[verify ...]` annotation
       b. Write minimum code to pass with `r[impl ...]` annotation
       c. Refactor while tests pass
-      d. Commit with a descriptive message
 
    4. After completing each task group, run `tracey_status` to check coverage progress.
 
    5. Do NOT write placeholder or stub implementations. Every function must be real.
 
    6. Do NOT assume code doesn't exist — search first before implementing.
+
+   7. Commit work with descriptive messages after completing each task or logical group.
 
    ## Completion Criteria
 

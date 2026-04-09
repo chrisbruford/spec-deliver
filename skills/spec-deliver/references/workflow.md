@@ -24,11 +24,11 @@ Engineer has idea
     │   └─ Says "approved" to proceed
     │
     ├─ Phase 4: DELIVER
-    │   └─ Ralph loop runs autonomously:
-    │       ├─ Implements tasks in TDD order
+    │   └─ Ralph loop creates an agent team:
+    │       ├─ Lead agent analyses tasks and creates team
+    │       ├─ Teammates implement tasks in parallel
     │       ├─ Adds r[impl ...] to production code
     │       ├─ Adds r[verify ...] to test code
-    │       ├─ Checks tracey_status after each group
     │       └─ Exits when coverage = 100% and all tasks done
     │   └─ Cleanup: removes ralph-loop state files
     │
@@ -105,7 +105,7 @@ test('exports user data as CSV', () => {
 
 ## Completion Criteria
 
-The Ralph loop exits when:
+The agent team's work is complete when:
 1. All tasks in tasks.md are checked `[x]`
 2. `tracey_uncovered` returns 0 for the change's requirements
 3. `tracey_untested` returns 0 for the change's requirements
