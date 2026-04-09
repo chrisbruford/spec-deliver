@@ -24,8 +24,9 @@ Orchestrates OpenSpec + Tracey + Ralph loop for engineer-led, AI-executed delive
   3. Generates specs with Tracey markers         ← proposal, specs, design, tasks
   4. Presents specs for your review              ← QUALITY GATE: edit or approve
   5. Ralph loop delivers autonomously            ← TDD + Tracey annotations
-  6. Verifies coverage + archives                ← tracey_status + opsx:verify
-  7. Creates PR                                  ← with full traceability
+  6. QA: code review + build + tests              ← QA GATE (sub-agent review, build, tests)
+  7. Verifies coverage + archives                ← tracey_status + opsx:verify
+  8. Creates PR                                  ← with full traceability
 
 ## Resume
 

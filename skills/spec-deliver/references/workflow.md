@@ -30,16 +30,23 @@ Engineer has idea
     │       ├─ Adds r[verify ...] to test code
     │       ├─ Checks tracey_status after each group
     │       └─ Exits when coverage = 100% and all tasks done
+    │   └─ Cleanup: removes ralph-loop state files
     │
-    ├─ Phase 5: VERIFY
+    ├─ Phase 5: QA ← CODE REVIEW + BUILD + TEST GATE
+    │   └─ qa-code-reviewer sub-agent reviews diff for quality/security/patterns
+    │   └─ Detect build system and run build (if applicable)
+    │   └─ Detect test framework and run full test suite
+    │   └─ Report results, block on critical issues (user can fix or skip)
+    │
+    ├─ Phase 6: VERIFY
     │   └─ tracey_status — final coverage report
     │   └─ tracey_uncovered — any gaps
     │   └─ /opsx:verify — completeness, correctness, coherence
     │
-    ├─ Phase 6: ARCHIVE
+    ├─ Phase 7: ARCHIVE
     │   └─ /opsx:archive — syncs delta specs to stable, archives change
     │
-    └─ Phase 7: PR
+    └─ Phase 8: PR
         └─ gh pr create — with spec traceability in description
 ```
 
@@ -50,7 +57,7 @@ The orchestrator writes `.claude/spec-deliver.local.md` to track progress:
 ```yaml
 ---
 change: add-user-auth
-phase: delivering       # exploring | proposing | reviewing | delivering | verifying | archiving | complete
+phase: delivering       # exploring | proposing | reviewing | delivering | qa | verifying | archiving | complete
 approved: true
 max_iterations: 30
 started: 2026-03-22
@@ -103,3 +110,8 @@ The Ralph loop exits when:
 2. `tracey_uncovered` returns 0 for the change's requirements
 3. `tracey_untested` returns 0 for the change's requirements
 4. All tests pass
+
+The QA phase then validates:
+5. Code review sub-agent finds no critical issues
+6. Project builds successfully (if applicable)
+7. Full test suite passes (not just tests from this change)

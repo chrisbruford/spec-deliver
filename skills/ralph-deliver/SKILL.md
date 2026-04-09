@@ -157,8 +157,14 @@ This skill can be used standalone or is called by `/spec-deliver:spec-deliver` d
 
 After the Ralph loop completes (or hits max iterations):
 
-1. Run `tracey_status` to report final coverage
-2. Run `tracey_uncovered` to list any remaining gaps
-3. Suggest next steps:
+1. **Clean up ralph-loop state files**:
+   ```bash
+   rm -f .claude/ralph-loop.local.md
+   rm -f .claude/spec-deliver-prompt.local.md
+   ```
+
+2. Run `tracey_status` to report final coverage
+3. Run `tracey_uncovered` to list any remaining gaps
+4. Suggest next steps:
    - If complete: "Run `/opsx:verify` to validate, then `/opsx:archive` to archive."
    - If incomplete: "N requirements still uncovered. Review gaps and consider another `/spec-deliver:ralph-deliver` pass or manual implementation."

@@ -16,9 +16,10 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 2. **Propose** — Generate all spec artifacts with Tracey markers
 3. **Review** — Present specs for human approval (human checkpoint)
 4. **Deliver** — Ralph loop for autonomous implementation
-5. **Verify** — Validate implementation against specs
-6. **Archive** — Sync delta specs and archive the change
-7. **PR** — Create a pull request
+5. **QA** — Code review sub-agent + build check + test suite pass
+6. **Verify** — Validate implementation against specs
+7. **Archive** — Sync delta specs and archive the change
+8. **PR** — Create a pull request
 
 ## Steps
 
@@ -73,6 +74,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
    | proposing | Partial artifacts | proposing (re-run propose) |
    | reviewing | All artifacts present | reviewing (re-ask for approval) |
    | delivering | Mix of [x] and [ ] tasks | delivering (re-launch ralph) |
+   | qa | All tasks [x] | qa (re-run build + tests) |
    | verifying | All tasks [x] | verifying (run verify) |
    | archiving | Change not archived | archiving (run archive) |
    | any | Change archived | complete |
@@ -200,25 +202,135 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     - args: `<change-name> --max-iterations <N>`
 
     This handles all artifact reading, prompt assembly, and Ralph loop launch.
-    When it completes, proceed to Phase 5.
+    When it completes, proceed to cleanup and then Phase 5.
 
-### Phase 5 — Verify
+20. **Clean up ralph-loop state**:
 
-20. **Update state file**: Change `phase: delivering` to `phase: verifying`.
+    The ralph-loop leaves a state file that must be removed after delivery:
+    ```bash
+    rm -f .claude/ralph-loop.local.md
+    ```
 
-21. **Check Tracey coverage**:
+    Also clean up the assembled prompt file if it was written:
+    ```bash
+    rm -f .claude/spec-deliver-prompt.local.md
+    ```
+
+### Phase 5 — QA
+
+21. **Update state file**: Change `phase: delivering` to `phase: qa` and update `updated` date.
+
+22. **Run QA code review via sub-agent**:
+
+    Launch a QA-oriented sub-agent using the Agent tool to review the code changes
+    made during delivery.
+
+    Provide the agent with:
+    - The change name
+    - The change directory path (`openspec/changes/<change-name>/`)
+
+    Let the agent determine its own review approach. Do not prescribe what to
+    check or how to structure its output — just tell it to QA the code changes
+    for this change and report any issues with severity levels.
+
+    Wait for the agent to complete and display its findings to the user.
+
+    If the review contains **critical** issues:
+    - Display the critical issues
+    - Ask the user:
+      > QA review found <N> critical issue(s). Would you like to:
+      > 1. Fix the issues and re-run the review
+      > 2. Acknowledge and continue anyway
+      > 3. Stop here
+
+    If the user chooses to fix, make the fixes, then re-launch the QA agent.
+    Repeat until no critical issues remain or the user chooses to continue/stop.
+
+23. **Detect build system and run build** (if applicable):
+
+    Check for common build indicators in this order and run the first match:
+
+    | Indicator | Build command |
+    |---|---|
+    | `Makefile` or `makefile` | `make build` (or `make` if no `build` target) |
+    | `package.json` with `build` script | `npm run build` (or `yarn build` / `pnpm build` based on lockfile) |
+    | `tsconfig.json` (no build script) | `npx tsc --noEmit` |
+    | `Cargo.toml` | `cargo build` |
+    | `go.mod` | `go build ./...` |
+    | `*.csproj` or `*.sln` | `dotnet build` |
+    | `pom.xml` | `mvn compile` |
+    | `build.gradle` or `build.gradle.kts` | `./gradlew build -x test` |
+    | `pyproject.toml` or `setup.py` | skip (Python projects typically don't have a build step) |
+    | None of the above | skip build check |
+
+    If the build **fails**:
+    - Display the build errors
+    - Ask the user:
+      > Build failed. Would you like to:
+      > 1. Fix the errors and re-run the build
+      > 2. Skip the build check and continue
+      > 3. Stop here
+
+    If the user chooses to fix, attempt to fix the build errors, then re-run the
+    build command. Repeat until the build passes or the user chooses to skip/stop.
+
+24. **Detect test framework and run tests**:
+
+    Check for test indicators in this order and run the first match:
+
+    | Indicator | Test command |
+    |---|---|
+    | `package.json` with `test` script | `npm test` (or `yarn test` / `pnpm test` based on lockfile) |
+    | `Cargo.toml` | `cargo test` |
+    | `go.mod` | `go test ./...` |
+    | `*.csproj` or `*.sln` | `dotnet test` |
+    | `pom.xml` | `mvn test` |
+    | `build.gradle` or `build.gradle.kts` | `./gradlew test` |
+    | `Makefile` with `test` target | `make test` |
+    | `pyproject.toml` with pytest | `pytest` |
+    | `pytest.ini` or `setup.cfg` with pytest | `pytest` |
+    | None of the above | skip test check |
+
+    If tests **fail**:
+    - Display the test failures
+    - Ask the user:
+      > Tests failed (<N> failures). Would you like to:
+      > 1. Fix the failing tests and re-run
+      > 2. Skip the test check and continue
+      > 3. Stop here
+
+    If the user chooses to fix, attempt to fix the test failures, then re-run the
+    test command. Repeat until tests pass or the user chooses to skip/stop.
+
+25. **Report QA results**:
+
+    ```
+    ## QA Results
+
+    **Code review**: <passed / <N> critical issues (user acknowledged) / <N> issues fixed>
+    **Build**: <passed / skipped / failed (user skipped)>
+    **Tests**: <passed (N tests) / skipped / failed (N failures, user skipped)>
+    ```
+
+    Proceed to Phase 6.
+
+### Phase 6 — Verify
+
+26. **Update state file**: Change `phase: qa` to `phase: verifying`.
+
+27. **Check Tracey coverage**:
     - Call `tracey_status` MCP tool to get final coverage
     - Call `tracey_uncovered` to list any gaps
     - Call `tracey_untested` to list requirements without test coverage
 
-22. **Run OpenSpec verify**:
+28. **Run OpenSpec verify**:
 
     Invoke the Skill tool with:
     - skill: `opsx:verify` (if available)
     - Otherwise, manually check: read each spec requirement and verify corresponding
       code exists with `r[impl ...]` annotation.
 
-23. **Report verification results**:
+29. **Report verification results**:
 
     ```
     ## Verification Results
@@ -235,11 +347,11 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     > 2. Proceed to archive anyway
     > 3. Stop here
 
-### Phase 6 — Archive
+### Phase 7 — Archive
 
-24. **Update state file**: Change `phase: verifying` to `phase: archiving`.
+30. **Update state file**: Change `phase: verifying` to `phase: archiving`.
 
-25. **Archive the change**:
+31. **Archive the change**:
 
     Invoke the Skill tool with:
     - skill: `opsx:archive`
@@ -247,11 +359,11 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 
     This syncs delta specs into `openspec/specs/` and moves the change to the archive.
 
-### Phase 7 — PR
+### Phase 8 — PR
 
-26. **Update state file**: Change `phase: archiving` to `phase: complete`.
+32. **Update state file**: Change `phase: archiving` to `phase: complete`.
 
-27. **Create a pull request**:
+33. **Create a pull request**:
 
     Check if there are commits to push:
     ```bash
@@ -268,13 +380,12 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
         - Tracey coverage percentage
         - Link to archived specs
 
-28. **Clean up state file**:
+34. **Clean up state file**:
     ```bash
     rm .claude/spec-deliver.local.md
-    rm -f .claude/spec-deliver-prompt.local.md
     ```
 
-29. **Final summary**:
+35. **Final summary**:
 
     ```
     ## Delivery Complete: <change-name>
