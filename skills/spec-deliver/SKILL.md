@@ -16,7 +16,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 2. **Propose** — Generate all spec artifacts with Tracey markers
 3. **Review** — Present specs for human approval (human checkpoint)
 4. **Deliver** — Ralph loop for autonomous implementation
-5. **QA** — Code review sub-agent + build check + test suite pass
+5. **QA** — Code review + build check + test suite pass
 6. **Verify** — Validate implementation against specs
 7. **Archive** — Sync delta specs and archive the change
 8. **PR** — Create a pull request
@@ -34,6 +34,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 2. **Check for existing state file**:
 
    Use Bash to check:
+
    ```bash
    test -f .claude/spec-deliver.local.md && echo "EXISTS" || echo "NOT_FOUND"
    ```
@@ -49,11 +50,13 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 4. **Cross-reference with on-disk state** to validate:
 
    a. Check if the change directory exists:
+
    ```bash
    test -d "openspec/changes/${CHANGE}" && echo "EXISTS" || echo "NOT_FOUND"
    ```
 
    b. If the change exists, get artifact status:
+
    ```bash
    openspec status --change "${CHANGE}" --json
    ```
@@ -62,22 +65,23 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
    - Count `- [x]` (completed) and `- [ ]` (pending)
 
    d. Check if change was already archived:
+
    ```bash
    test -d "openspec/changes/archive/*-${CHANGE}" && echo "ARCHIVED" || echo "NOT_ARCHIVED"
    ```
 
 5. **Determine actual phase** by reconciling state file with disk:
 
-   | State file says | Disk shows | Actual phase |
-   |---|---|---|
-   | exploring | No change dir | exploring (restart explore) |
-   | proposing | Partial artifacts | proposing (re-run propose) |
-   | reviewing | All artifacts present | reviewing (re-ask for approval) |
-   | delivering | Mix of [x] and [ ] tasks | delivering (re-launch ralph) |
-   | qa | All tasks [x] | qa (re-run build + tests) |
-   | verifying | All tasks [x] | verifying (run verify) |
-   | archiving | Change not archived | archiving (run archive) |
-   | any | Change archived | complete |
+   | State file says | Disk shows               | Actual phase                    |
+   | --------------- | ------------------------ | ------------------------------- |
+   | exploring       | No change dir            | exploring (restart explore)     |
+   | proposing       | Partial artifacts        | proposing (re-run propose)      |
+   | reviewing       | All artifacts present    | reviewing (re-ask for approval) |
+   | delivering      | Mix of [x] and [ ] tasks | delivering (re-launch ralph)    |
+   | qa              | All tasks [x]            | qa (re-run build + tests)       |
+   | verifying       | All tasks [x]            | verifying (run verify)          |
+   | archiving       | Change not archived      | archiving (run archive)         |
+   | any             | Change archived          | complete                        |
 
 6. **Display resume summary**:
 
@@ -158,6 +162,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 16. **Present specs for review**:
 
     Display:
+
     ```
     ## Specs Ready for Review
 
@@ -207,11 +212,13 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 20. **Clean up ralph-loop state**:
 
     The ralph-loop leaves a state file that must be removed after delivery:
+
     ```bash
     rm -f .claude/ralph-loop.local.md
     ```
 
     Also clean up the assembled prompt file if it was written:
+
     ```bash
     rm -f .claude/spec-deliver-prompt.local.md
     ```
@@ -239,6 +246,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     - Display the critical issues
     - Ask the user:
       > QA review found <N> critical issue(s). Would you like to:
+      >
       > 1. Fix the issues and re-run the review
       > 2. Acknowledge and continue anyway
       > 3. Stop here
@@ -250,23 +258,24 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 
     Check for common build indicators in this order and run the first match:
 
-    | Indicator | Build command |
-    |---|---|
-    | `Makefile` or `makefile` | `make build` (or `make` if no `build` target) |
-    | `package.json` with `build` script | `npm run build` (or `yarn build` / `pnpm build` based on lockfile) |
-    | `tsconfig.json` (no build script) | `npx tsc --noEmit` |
-    | `Cargo.toml` | `cargo build` |
-    | `go.mod` | `go build ./...` |
-    | `*.csproj` or `*.sln` | `dotnet build` |
-    | `pom.xml` | `mvn compile` |
-    | `build.gradle` or `build.gradle.kts` | `./gradlew build -x test` |
-    | `pyproject.toml` or `setup.py` | skip (Python projects typically don't have a build step) |
-    | None of the above | skip build check |
+    | Indicator                            | Build command                                                      |
+    | ------------------------------------ | ------------------------------------------------------------------ |
+    | `Makefile` or `makefile`             | `make build` (or `make` if no `build` target)                      |
+    | `package.json` with `build` script   | `npm run build` (or `yarn build` / `pnpm build` based on lockfile) |
+    | `tsconfig.json` (no build script)    | `npx tsc --noEmit`                                                 |
+    | `Cargo.toml`                         | `cargo build`                                                      |
+    | `go.mod`                             | `go build ./...`                                                   |
+    | `*.csproj` or `*.sln`                | `dotnet build`                                                     |
+    | `pom.xml`                            | `mvn compile`                                                      |
+    | `build.gradle` or `build.gradle.kts` | `./gradlew build -x test`                                          |
+    | `pyproject.toml` or `setup.py`       | skip (Python projects typically don't have a build step)           |
+    | None of the above                    | skip build check                                                   |
 
     If the build **fails**:
     - Display the build errors
     - Ask the user:
       > Build failed. Would you like to:
+      >
       > 1. Fix the errors and re-run the build
       > 2. Skip the build check and continue
       > 3. Stop here
@@ -278,23 +287,24 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 
     Check for test indicators in this order and run the first match:
 
-    | Indicator | Test command |
-    |---|---|
-    | `package.json` with `test` script | `npm test` (or `yarn test` / `pnpm test` based on lockfile) |
-    | `Cargo.toml` | `cargo test` |
-    | `go.mod` | `go test ./...` |
-    | `*.csproj` or `*.sln` | `dotnet test` |
-    | `pom.xml` | `mvn test` |
-    | `build.gradle` or `build.gradle.kts` | `./gradlew test` |
-    | `Makefile` with `test` target | `make test` |
-    | `pyproject.toml` with pytest | `pytest` |
-    | `pytest.ini` or `setup.cfg` with pytest | `pytest` |
-    | None of the above | skip test check |
+    | Indicator                               | Test command                                                |
+    | --------------------------------------- | ----------------------------------------------------------- |
+    | `package.json` with `test` script       | `npm test` (or `yarn test` / `pnpm test` based on lockfile) |
+    | `Cargo.toml`                            | `cargo test`                                                |
+    | `go.mod`                                | `go test ./...`                                             |
+    | `*.csproj` or `*.sln`                   | `dotnet test`                                               |
+    | `pom.xml`                               | `mvn test`                                                  |
+    | `build.gradle` or `build.gradle.kts`    | `./gradlew test`                                            |
+    | `Makefile` with `test` target           | `make test`                                                 |
+    | `pyproject.toml` with pytest            | `pytest`                                                    |
+    | `pytest.ini` or `setup.cfg` with pytest | `pytest`                                                    |
+    | None of the above                       | skip test check                                             |
 
     If tests **fail**:
     - Display the test failures
     - Ask the user:
       > Tests failed (<N> failures). Would you like to:
+      >
       > 1. Fix the failing tests and re-run
       > 2. Skip the test check and continue
       > 3. Stop here
@@ -342,7 +352,9 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     ```
 
     If there are gaps, ask the user:
+
     > <N> requirements still uncovered. Would you like to:
+    >
     > 1. Run another Ralph loop pass to fill gaps
     > 2. Proceed to archive anyway
     > 3. Stop here
@@ -366,6 +378,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 33. **Create a pull request**:
 
     Check if there are commits to push:
+
     ```bash
     git log --oneline origin/HEAD..HEAD 2>/dev/null | head -5
     ```
@@ -381,6 +394,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
         - Link to archived specs
 
 34. **Clean up state file**:
+
     ```bash
     rm .claude/spec-deliver.local.md
     ```

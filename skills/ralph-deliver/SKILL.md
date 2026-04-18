@@ -109,7 +109,19 @@ This skill can be used standalone or is called by `/spec-deliver:spec-deliver` d
 
    6. Do NOT assume code doesn't exist — search first before implementing.
 
-   7. Commit work with descriptive messages after completing each task or logical group.
+   7. **Boy-scout rule** — leave code better than you found it:
+      - You are encouraged to make targeted improvements to code encountered in the
+        path of your work: fix small bugs, remove dead code, improve naming, clean up
+        minor technical debt, or address code quality issues.
+      - Significant changes outside the direct scope of this change (large refactors,
+        structural redesigns, dependency upgrades) should only be undertaken if they
+        directly block progress, block value delivery, or would force a materially
+        inferior solution due to existing technical debt or bugs. In those cases,
+        note what you changed and why in the commit message.
+      - When in doubt, keep boy-scout changes small and targeted. A one-line fix is
+        always welcome; a cross-cutting refactor is not unless it is unavoidable.
+
+   8. Commit work with descriptive messages after completing each task or logical group.
 
    ## Completion Criteria
 
