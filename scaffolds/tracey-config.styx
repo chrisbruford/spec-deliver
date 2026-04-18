@@ -6,6 +6,9 @@ specs (
             openspec/specs/**/*.md
             openspec/changes/*/specs/**/*.md
         )
+        exclude (
+            openspec/changes/archive/**
+        )
         impls (
             {{IMPLS}}
         )

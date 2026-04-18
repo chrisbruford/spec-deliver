@@ -153,7 +153,25 @@ This skill can be used standalone or is called by `/spec-deliver:spec-deliver` d
    Launching Ralph loop...
    ```
 
-9. **Launch the Ralph loop**:
+9. **Pre-flight Tracey validation**:
+
+   Call `tracey_validate`. If it returns errors:
+
+   - **Duplicate requirement errors**: Read `.config/tracey/config.styx`, remove any
+     explicit paths containing `openspec/changes/archive/`, call `tracey_reload`, then
+     re-run `tracey_validate`.
+
+   - **Errors persist**: Report the full `tracey_validate` output and stop. The
+     completion criterion (`tracey_uncovered` returning 0) cannot function with a
+     broken Tracey index — launching Ralph now will produce a loop that never
+     terminates cleanly.
+
+   - **Config looks correct but Tracey is unhappy**: Suggest running
+     `/spec-deliver:tracey-health --fix` and retrying.
+
+   If `tracey_validate` is clean, proceed.
+
+10. **Launch the Ralph loop**:
 
    Invoke the `/ralph-loop` skill with the assembled prompt:
 
@@ -177,7 +195,8 @@ This skill can be used standalone or is called by `/spec-deliver:spec-deliver` d
 
 After the Ralph loop completes (or hits max iterations):
 
-1. **Clean up ralph-loop state files**:
+1. **Clean up ralph-loop state files** (standalone use only — when invoked via
+   `/spec-deliver:spec-deliver`, the orchestrator handles this cleanup):
    ```bash
    rm -f .claude/ralph-loop.local.md
    rm -f .claude/spec-deliver-prompt.local.md
@@ -186,5 +205,7 @@ After the Ralph loop completes (or hits max iterations):
 2. Run `tracey_status` to report final coverage
 3. Run `tracey_uncovered` to list any remaining gaps
 4. Suggest next steps:
-   - If complete: "Run `/opsx:verify` to validate, then `/opsx:archive` to archive."
-   - If incomplete: "N requirements still uncovered. Review gaps and consider another `/spec-deliver:ralph-deliver` pass or manual implementation."
+   - If invoked via `/spec-deliver:spec-deliver`: return to the orchestrator — it
+     will handle QA, verify, archive, and PR automatically.
+   - If complete (standalone): "Run `/opsx:verify` to validate, then `/opsx:archive` to archive."
+   - If incomplete (standalone): "N requirements still uncovered. Review gaps and consider another `/spec-deliver:ralph-deliver` pass or manual implementation."

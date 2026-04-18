@@ -150,16 +150,36 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     Check all `applyRequires` artifacts have `status: "done"`.
     If not, report what's missing and stop.
 
+14. **Verify Tracey config health**:
+
+    Read `.config/tracey/config.styx` and check:
+
+    a. The spec `include` list contains `openspec/changes/*/specs/**/*.md` (the
+       wildcard that covers all active changes without per-change edits).
+       If missing, add it.
+
+    b. The spec block has an `exclude` list containing `openspec/changes/archive/**`.
+       If missing, add it.
+
+    c. If any edits were made, call `tracey_reload` to rebuild the daemon index.
+       If `tracey_reload` is unavailable (Tracey daemon not running or MCP not
+       configured), note this to the user and advise restarting the daemon before
+       delivery begins.
+
+    d. If Tracey MCP tools are available, call `tracey_validate`. If it returns
+       errors, report them in full and stop — do not proceed to Review with a broken
+       Tracey config. Suggest running `/spec-deliver:tracey-health --fix` to repair.
+
 ### Phase 3 — Review
 
-14. **Update state file**: Change `phase: proposing` to `phase: reviewing`.
+15. **Update state file**: Change `phase: proposing` to `phase: reviewing`.
 
-15. **Extract Tracey requirement IDs** from the generated specs:
+16. **Extract Tracey requirement IDs** from the generated specs:
     - Use Glob to find `openspec/changes/<change-name>/specs/**/*.md`
     - Read each file and extract all `> r[...]` markers
     - Count total requirements
 
-16. **Present specs for review**:
+17. **Present specs for review**:
 
     Display:
 
@@ -186,7 +206,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     - Say **"cancel"** to stop
     ```
 
-17. **Wait for approval**:
+18. **Wait for approval**:
 
     Use AskUserQuestion with:
     - Question: "Review the specs above. Say **approved** to proceed to Ralph loop delivery, or describe what changes you'd like."
@@ -198,9 +218,9 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 
 ### Phase 4 — Deliver
 
-18. **Update state file**: Change `phase: reviewing` to `phase: delivering` and set `approved: true`.
+19. **Update state file**: Change `phase: reviewing` to `phase: delivering` and set `approved: true`.
 
-19. **Delegate to ralph-deliver**:
+20. **Delegate to ralph-deliver**:
 
     Invoke the Skill tool with:
     - skill: `spec-deliver:ralph-deliver`
@@ -209,7 +229,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     This handles all artifact reading, prompt assembly, and Ralph loop launch.
     When it completes, proceed to cleanup and then Phase 5.
 
-20. **Clean up ralph-loop state**:
+21. **Clean up ralph-loop state**:
 
     The ralph-loop leaves a state file that must be removed after delivery:
 
@@ -225,9 +245,9 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 
 ### Phase 5 — QA
 
-21. **Update state file**: Change `phase: delivering` to `phase: qa` and update `updated` date.
+22. **Update state file**: Change `phase: delivering` to `phase: qa` and update `updated` date.
 
-22. **Run QA code review via sub-agent**:
+23. **Run QA code review via sub-agent**:
 
     Launch a QA-oriented sub-agent using the Agent tool to review the code changes
     made during delivery.
@@ -254,7 +274,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     If the user chooses to fix, make the fixes, then re-launch the QA agent.
     Repeat until no critical issues remain or the user chooses to continue/stop.
 
-23. **Detect build system and run build** (if applicable):
+24. **Detect build system and run build** (if applicable):
 
     Check for common build indicators in this order and run the first match:
 
@@ -283,7 +303,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     If the user chooses to fix, attempt to fix the build errors, then re-run the
     build command. Repeat until the build passes or the user chooses to skip/stop.
 
-24. **Detect test framework and run tests**:
+25. **Detect test framework and run tests**:
 
     Check for test indicators in this order and run the first match:
 
@@ -312,7 +332,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     If the user chooses to fix, attempt to fix the test failures, then re-run the
     test command. Repeat until tests pass or the user chooses to skip/stop.
 
-25. **Report QA results**:
+26. **Report QA results**:
 
     ```
     ## QA Results
@@ -326,21 +346,21 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 
 ### Phase 6 — Verify
 
-26. **Update state file**: Change `phase: qa` to `phase: verifying`.
+27. **Update state file**: Change `phase: qa` to `phase: verifying`.
 
-27. **Check Tracey coverage**:
+28. **Check Tracey coverage**:
     - Call `tracey_status` MCP tool to get final coverage
     - Call `tracey_uncovered` to list any gaps
     - Call `tracey_untested` to list requirements without test coverage
 
-28. **Run OpenSpec verify**:
+29. **Run OpenSpec verify**:
 
     Invoke the Skill tool with:
     - skill: `opsx:verify` (if available)
     - Otherwise, manually check: read each spec requirement and verify corresponding
       code exists with `r[impl ...]` annotation.
 
-29. **Report verification results**:
+30. **Report verification results**:
 
     ```
     ## Verification Results
@@ -361,9 +381,26 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 
 ### Phase 7 — Archive
 
-30. **Update state file**: Change `phase: verifying` to `phase: archiving`.
+31. **Update state file**: Change `phase: verifying` to `phase: archiving`.
 
-31. **Archive the change**:
+32. **Clean up config.styx before archiving**:
+
+    Read `.config/tracey/config.styx` and remove any stale explicit paths that
+    would cause duplicate-requirement errors after the archive syncs specs into
+    `openspec/specs/`:
+
+    - Remove any explicit include paths containing `openspec/changes/<change-name>/`
+      (these are legacy entries made redundant by the `openspec/changes/*/specs/**/*.md`
+      wildcard; after archive they point to the archive directory and cause duplicates)
+    - Remove any explicit include paths containing `openspec/changes/archive/`
+    - Ensure `openspec/changes/*/specs/**/*.md` is in the include list
+    - Ensure `openspec/changes/archive/**` is in the exclude list
+
+    If any changes were made, write the file and call `tracey_reload`. If
+    `tracey_reload` is unavailable, the user must restart the Tracey daemon
+    before the PR is created.
+
+33. **Archive the change**:
 
     Invoke the Skill tool with:
     - skill: `opsx:archive`
@@ -371,11 +408,18 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 
     This syncs delta specs into `openspec/specs/` and moves the change to the archive.
 
+    After archive completes, call `tracey_validate` (if available). If it reports
+    duplicate requirements, run the cleanup from step 32 once more and call
+    `tracey_reload`, then re-run `tracey_validate`. If errors persist after this
+    single retry, report them and stop — the duplicates are likely genuine ID
+    conflicts in the spec files themselves and require manual resolution before
+    creating the PR.
+
 ### Phase 8 — PR
 
-32. **Update state file**: Change `phase: archiving` to `phase: complete`.
+34. **Update state file**: Change `phase: archiving` to `phase: complete`.
 
-33. **Create a pull request**:
+35. **Create a pull request**:
 
     Check if there are commits to push:
 
@@ -393,13 +437,13 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
         - Tracey coverage percentage
         - Link to archived specs
 
-34. **Clean up state file**:
+36. **Clean up state file**:
 
     ```bash
     rm .claude/spec-deliver.local.md
     ```
 
-35. **Final summary**:
+37. **Final summary**:
 
     ```
     ## Delivery Complete: <change-name>

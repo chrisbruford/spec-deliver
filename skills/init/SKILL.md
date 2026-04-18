@@ -88,7 +88,7 @@ Tracey-integrated custom schema and creates the Tracey configuration.
    mkdir -p .config/tracey
    ```
 
-   Build the Tracey config based on the detected tech stack. For each detected language,
+   Build the impl blocks based on the detected tech stack. For each detected language,
    generate an `impl` block with appropriate include/exclude globs:
 
    **TypeScript**: `include (src/**/*.ts src/**/*.tsx)`, `exclude (node_modules/** dist/** build/**)`
@@ -98,23 +98,22 @@ Tracey-integrated custom schema and creates the Tracey configuration.
    **Python**: `include (**/*.py)`, `exclude (__pycache__/** .venv/** venv/**)`
    **Ruby**: `include (**/*.rb)`, `exclude (vendor/**)`
 
-   Write the config to `.config/tracey/config.styx` using this structure:
+   Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/tracey-config.styx` as a template.
+   Replace `{{IMPLS}}` with the generated impl blocks for the detected languages,
+   one block per language. Each impl block must use this styx format:
 
    ```
-   specs (
-       {
-           name openspec
-           prefix r
-           include (
-               openspec/specs/**/*.md
-               openspec/changes/*/specs/**/*.md
-           )
-           impls (
-               {impl blocks for each detected language}
-           )
-       }
-   )
+   {
+       name typescript
+       include (src/**/*.ts src/**/*.tsx)
+       exclude (node_modules/** dist/** build/**)
+   }
    ```
+
+   Write the result to `.config/tracey/config.styx`.
+
+   The scaffold already includes the correct wildcard include patterns and the
+   archive exclude — do not manually construct the spec block.
 
 9. **Verify setup**:
    ```bash
