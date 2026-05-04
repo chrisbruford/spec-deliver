@@ -1,6 +1,6 @@
 {
   "name": "spec-deliver",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "Spec-driven autonomous delivery: OpenSpec + Tracey traceability + Ralph loop. Orchestrates explore, propose, review, deliver, verify, archive.",
   "author": {
     "name": "Chris Bruford"
