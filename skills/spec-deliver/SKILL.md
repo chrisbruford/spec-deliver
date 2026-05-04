@@ -144,9 +144,11 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     This generates all artifacts (proposal.md, specs with Tracey markers, design.md, tasks.md).
 
 13. **Verify artifacts were created**:
+
     ```bash
     openspec status --change "<change-name>" --json
     ```
+
     Check all `applyRequires` artifacts have `status: "done"`.
     If not, report what's missing and stop.
 
@@ -155,20 +157,20 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     Read `.config/tracey/config.styx` and check:
 
     a. The spec `include` list contains `openspec/changes/*/specs/**/*.md` (the
-       wildcard that covers all active changes without per-change edits).
-       If missing, add it.
+    wildcard that covers all active changes without per-change edits).
+    If missing, add it.
 
     b. The spec block has an `exclude` list containing `openspec/changes/archive/**`.
-       If missing, add it.
+    If missing, add it.
 
     c. If any edits were made, call `tracey_reload` to rebuild the daemon index.
-       If `tracey_reload` is unavailable (Tracey daemon not running or MCP not
-       configured), note this to the user and advise restarting the daemon before
-       delivery begins.
+    If `tracey_reload` is unavailable (Tracey daemon not running or MCP not
+    configured), note this to the user and advise restarting the daemon before
+    delivery begins.
 
     d. If Tracey MCP tools are available, call `tracey_validate`. If it returns
-       errors, report them in full and stop — do not proceed to Review with a broken
-       Tracey config. Suggest running `/spec-deliver:tracey-health --fix` to repair.
+    errors, report them in full and stop — do not proceed to Review with a broken
+    Tracey config. Suggest running `/spec-deliver:tracey-health --fix` to repair.
 
 ### Phase 3 — Review
 
@@ -249,8 +251,8 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 
 23. **Run QA code review via sub-agent**:
 
-    Launch a QA-oriented sub-agent using the Agent tool to review the code changes
-    made during delivery.
+    Launch the best available QA sub-agents to review the code changes
+    made during delivery. Look for agents with skills like `code-review`, `qa-review`, `static-analysis`, or similar. If multiple are available, you can choose to run them in parallel or sequentially.
 
     Provide the agent with:
     - The change name
@@ -258,79 +260,24 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 
     Let the agent determine its own review approach. Do not prescribe what to
     check or how to structure its output — just tell it to QA the code changes
-    for this change and report any issues with severity levels.
+    for this change and report any issues.
 
     Wait for the agent to complete and display its findings to the user.
 
-    If the review contains **critical** issues:
-    - Display the critical issues
-    - Ask the user:
-      > QA review found <N> critical issue(s). Would you like to:
-      >
-      > 1. Fix the issues and re-run the review
-      > 2. Acknowledge and continue anyway
-      > 3. Stop here
+    Once the reviews are complete, you should address the findings. Do not ignore issues flagged by the QA agent even if they are pre-existing. The goal is to ensure the code is in good shape before proceeding to build and test checks.
 
-    If the user chooses to fix, make the fixes, then re-launch the QA agent.
-    Repeat until no critical issues remain or the user chooses to continue/stop.
+24. **Detect build system and run build**:
 
-24. **Detect build system and run build** (if applicable):
+    Build the project using the appropriate command based on indicators in the repo:
 
-    Check for common build indicators in this order and run the first match:
-
-    | Indicator                            | Build command                                                      |
-    | ------------------------------------ | ------------------------------------------------------------------ |
-    | `Makefile` or `makefile`             | `make build` (or `make` if no `build` target)                      |
-    | `package.json` with `build` script   | `npm run build` (or `yarn build` / `pnpm build` based on lockfile) |
-    | `tsconfig.json` (no build script)    | `npx tsc --noEmit`                                                 |
-    | `Cargo.toml`                         | `cargo build`                                                      |
-    | `go.mod`                             | `go build ./...`                                                   |
-    | `*.csproj` or `*.sln`                | `dotnet build`                                                     |
-    | `pom.xml`                            | `mvn compile`                                                      |
-    | `build.gradle` or `build.gradle.kts` | `./gradlew build -x test`                                          |
-    | `pyproject.toml` or `setup.py`       | skip (Python projects typically don't have a build step)           |
-    | None of the above                    | skip build check                                                   |
-
-    If the build **fails**:
-    - Display the build errors
-    - Ask the user:
-      > Build failed. Would you like to:
-      >
-      > 1. Fix the errors and re-run the build
-      > 2. Skip the build check and continue
-      > 3. Stop here
-
-    If the user chooses to fix, attempt to fix the build errors, then re-run the
-    build command. Repeat until the build passes or the user chooses to skip/stop.
+    Attempt to fix the build errors, then re-run the
+    build command. Repeat until the build passes.
 
 25. **Detect test framework and run tests**:
 
-    Check for test indicators in this order and run the first match:
+    Run the full test suite using the appropriate command based on indicators in the repo:
 
-    | Indicator                               | Test command                                                |
-    | --------------------------------------- | ----------------------------------------------------------- |
-    | `package.json` with `test` script       | `npm test` (or `yarn test` / `pnpm test` based on lockfile) |
-    | `Cargo.toml`                            | `cargo test`                                                |
-    | `go.mod`                                | `go test ./...`                                             |
-    | `*.csproj` or `*.sln`                   | `dotnet test`                                               |
-    | `pom.xml`                               | `mvn test`                                                  |
-    | `build.gradle` or `build.gradle.kts`    | `./gradlew test`                                            |
-    | `Makefile` with `test` target           | `make test`                                                 |
-    | `pyproject.toml` with pytest            | `pytest`                                                    |
-    | `pytest.ini` or `setup.cfg` with pytest | `pytest`                                                    |
-    | None of the above                       | skip test check                                             |
-
-    If tests **fail**:
-    - Display the test failures
-    - Ask the user:
-      > Tests failed (<N> failures). Would you like to:
-      >
-      > 1. Fix the failing tests and re-run
-      > 2. Skip the test check and continue
-      > 3. Stop here
-
-    If the user chooses to fix, attempt to fix the test failures, then re-run the
-    test command. Repeat until tests pass or the user chooses to skip/stop.
+    Attempt to fix any test failures. Do not ignore any test failures even if they are pre-existing. Then re-run the test command. Repeat until all tests pass.
 
 26. **Report QA results**:
 
@@ -388,7 +335,6 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     Read `.config/tracey/config.styx` and remove any stale explicit paths that
     would cause duplicate-requirement errors after the archive syncs specs into
     `openspec/specs/`:
-
     - Remove any explicit include paths containing `openspec/changes/<change-name>/`
       (these are legacy entries made redundant by the `openspec/changes/*/specs/**/*.md`
       wildcard; after archive they point to the archive directory and cause duplicates)
@@ -417,9 +363,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 
 ### Phase 8 — PR
 
-34. **Update state file**: Change `phase: archiving` to `phase: complete`.
-
-35. **Create a pull request**:
+34. **Create a pull request**:
 
     Check if there are commits to push:
 
@@ -437,11 +381,13 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
         - Tracey coverage percentage
         - Link to archived specs
 
-36. **Clean up state file**:
+35. **Clean up state file**:
 
     ```bash
     rm .claude/spec-deliver.local.md
     ```
+
+36. **Update state file**: Change `phase: archiving` to `phase: complete`.
 
 37. **Final summary**:
 
