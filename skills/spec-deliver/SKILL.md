@@ -273,14 +273,14 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     coverage map and test-suite result. Wait for it to complete and capture the
     aggregated report.
 
-    **Success criterion** (per the global guidance in `~/.claude/CLAUDE.md`): the
-    parallel-review pass is **complete** when (a) all eight agents fanned out
-    without error, (b) every file in the diff has a verdict from at least one
-    agent, (c) any documented threat-model invariants were re-checked, (d) the
-    test suite was attempted. Success is **coverage, not zero findings** — the
-    "zero criticals" target is empirically unreachable with stochastic
-    reviewers (arXiv:2509.01494). Use the coverage map, not the finding count,
-    to decide whether the review is done.
+    **Success criterion**: the parallel-review pass is **complete** when
+    (a) all eight agents fanned out without error, (b) every file in the diff
+    has a verdict from at least one agent, (c) any documented threat-model
+    invariants were re-checked, (d) the test suite was attempted. Success is
+    **coverage, not zero findings** — the "zero criticals" target is
+    empirically unreachable with stochastic reviewers (arXiv:2509.01494). Use
+    the coverage map, not the finding count, to decide whether the review is
+    done. See `spec-deliver:parallel-review` step 6 for the full definition.
 
     If the report flags any agent as failed or any file as unreviewed, re-dispatch
     only the missing lens(es) via the Agent tool with the matching `subagent_type`
@@ -299,8 +299,9 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
       or open a follow-up.
 
     If the test suite failed (per the `tests-reviewer` lens), fix the failures —
-    pre-existing failures included. Re-run only the previously failing tests
-    rather than fanning out all eight agents again.
+    pre-existing failures included. After fixing, re-run the full test suite
+    (not just the previously failing tests) to catch any regressions the fixes
+    introduced. Do **not** fan out all eight agents again for this.
 
     For small surgical fixes, do **not** re-run the full parallel-review fan-out
     — the coverage map from the first pass remains valid and a second full pass
@@ -313,9 +314,11 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     Detect and run the project build using the appropriate command for the
     stack. If the build fails, fix the errors and re-run until it passes.
 
-    The full test suite was already executed by the `tests-reviewer` lens in
-    step 23 — refer back to that report for status and do not run tests again
-    here unless you made fixes that warrant re-verification.
+    The full test suite was executed by the `tests-reviewer` lens in step 23.
+    If any fixes were applied during triage (step 24) — which is the common
+    case for critical/high findings — re-run the full test suite here to
+    confirm no regressions were introduced. Only skip the re-run if step 24
+    produced no code changes.
 
 26. **Report QA results**:
 
