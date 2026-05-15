@@ -32,11 +32,15 @@ Engineer has idea
     │       └─ Exits when coverage = 100% and all tasks done
     │   └─ Cleanup: removes ralph-loop state files
     │
-    ├─ Phase 5: QA ← CODE REVIEW + BUILD + TEST GATE
-    │   └─ qa-code-reviewer sub-agent reviews diff for quality/security/patterns
+    ├─ Phase 5: QA ← PARALLEL REVIEW + BUILD GATE
+    │   └─ /parallel-review fans out 8 specialist reviewers in a single parallel
+    │       dispatch: qa, adversarial, security, concurrency, observability,
+    │       contract, ops, tests (tests-reviewer also runs the full test suite)
+    │   └─ Aggregated severity-sorted report with coverage map per file
+    │   └─ Triage: address critical/high; engineer-gated medium/low
+    │   └─ Success criterion = coverage (every file has a verdict), not zero
+    │       findings — empirically unreachable (arXiv:2509.01494)
     │   └─ Detect build system and run build (if applicable)
-    │   └─ Detect test framework and run full test suite
-    │   └─ Report results, block on critical issues (user can fix or skip)
     │
     ├─ Phase 6: VERIFY
     │   └─ tracey_status — final coverage report
@@ -112,6 +116,9 @@ The agent team's work is complete when:
 4. All tests pass
 
 The QA phase then validates:
-5. Code review sub-agent finds no critical issues
-6. Project builds successfully (if applicable)
-7. Full test suite passes (not just tests from this change)
+5. `/parallel-review` coverage criterion satisfied: all 8 specialist agents
+   returned, every file in the diff has at least one verdict, any documented
+   threat-model invariants were re-checked, the test suite was attempted
+6. Critical / high findings either fixed or explicitly acknowledged by the engineer
+7. Project builds successfully (if applicable)
+8. Full test suite passes (run by the `tests-reviewer` lens; failures fixed)

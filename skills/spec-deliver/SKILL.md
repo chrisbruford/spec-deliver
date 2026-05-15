@@ -16,7 +16,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 2. **Propose** — Generate all spec artifacts with Tracey markers
 3. **Review** — Present specs for human approval (human checkpoint)
 4. **Deliver** — Ralph loop for autonomous implementation
-5. **QA** — Code review + build check + test suite pass
+5. **QA** — Parallel multi-agent review (qa/adversarial/security/concurrency/observability/contract/ops/tests) + build check
 6. **Verify** — Validate implementation against specs
 7. **Archive** — Sync delta specs and archive the change
 8. **PR** — Create a pull request
@@ -249,44 +249,85 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 
 22. **Update state file**: Change `phase: delivering` to `phase: qa` and update `updated` date.
 
-23. **Run QA code review via sub-agent**:
+23. **Run the parallel-review skill**:
 
-    Launch the best available QA sub-agents to review the code changes
-    made during delivery. Look for agents with skills like `code-review`, `qa-review`, `static-analysis`, or similar. If multiple are available, you can choose to run them in parallel or sequentially.
+    Invoke the Skill tool with:
+    - skill: `spec-deliver:parallel-review`
+    - args: `<diff-base>` — omit to default to `main`. Prefer `origin/main`
+      when the local `main` branch may be stale.
 
-    Provide the agent with:
-    - The change name
-    - The change directory path (`openspec/changes/<change-name>/`)
+    This dispatches eight specialist reviewers in a single parallel fan-out:
 
-    Let the agent determine its own review approach. Do not prescribe what to
-    check or how to structure its output — just tell it to QA the code changes
-    for this change and report any issues.
+    | Lens | Scope |
+    | --- | --- |
+    | qa | Correctness, readability, idiomatic style, dead code, codebase patterns |
+    | adversarial | Hostile-persona stress testing (attacker, chaos monkey, pre-mortem analyst, compliance auditor) |
+    | security | Auth, secrets, threat-model regressions, injection, SSRF, crypto |
+    | concurrency | Races, ordering, atomicity, crash windows, replay/idempotency, async correctness |
+    | observability | Log hygiene, metrics, traces, error context, on-call signal, runbook integration |
+    | contract | API / wire-protocol back-compat, schema changes, env-var contracts, breaking changes |
+    | ops | Deploy / rollback safety, migrations, feature flags, IaC, blast radius |
+    | tests | Test quality AND runs the full test suite, reporting failures |
 
-    Wait for the agent to complete and display its findings to the user.
+    The skill aggregates findings into a single severity-sorted report with a
+    coverage map and test-suite result. Wait for it to complete and capture the
+    aggregated report.
 
-    Once the reviews are complete, you should address the findings. Do not ignore issues flagged by the QA agent even if they are pre-existing. The goal is to ensure the code is in good shape before proceeding to build and test checks.
+    **Success criterion** (per the global guidance in `~/.claude/CLAUDE.md`): the
+    parallel-review pass is **complete** when (a) all eight agents fanned out
+    without error, (b) every file in the diff has a verdict from at least one
+    agent, (c) any documented threat-model invariants were re-checked, (d) the
+    test suite was attempted. Success is **coverage, not zero findings** — the
+    "zero criticals" target is empirically unreachable with stochastic
+    reviewers (arXiv:2509.01494). Use the coverage map, not the finding count,
+    to decide whether the review is done.
 
-24. **Detect build system and run build**:
+    If the report flags any agent as failed or any file as unreviewed, re-dispatch
+    only the missing lens(es) via the Agent tool with the matching `subagent_type`
+    before proceeding — do not silently accept gaps.
 
-    Build the project using the appropriate command based on indicators in the repo:
+24. **Triage and address findings**:
 
-    Attempt to fix the build errors, then re-run the
-    build command. Repeat until the build passes.
+    Walk the aggregated report and act according to severity:
 
-25. **Detect test framework and run tests**:
+    - **CRITICAL / HIGH** — must be fixed before proceeding to Verify/Archive.
+      Do not skip silently. If the engineer explicitly defers a finding, record
+      that deferral in the QA report.
+    - **MEDIUM** — surface to the engineer. Default: fix in this delivery unless
+      they choose to defer (e.g., a follow-up issue).
+    - **LOW / INFO** — mention briefly; engineer decides whether to address now
+      or open a follow-up.
 
-    Run the full test suite using the appropriate command based on indicators in the repo:
+    If the test suite failed (per the `tests-reviewer` lens), fix the failures —
+    pre-existing failures included. Re-run only the previously failing tests
+    rather than fanning out all eight agents again.
 
-    Attempt to fix any test failures. Do not ignore any test failures even if they are pre-existing. Then re-run the test command. Repeat until all tests pass.
+    For small surgical fixes, do **not** re-run the full parallel-review fan-out
+    — the coverage map from the first pass remains valid and a second full pass
+    is expensive (eight agents × full diff). If the fixes are extensive (e.g.,
+    multiple files restructured), re-run `parallel-review` to refresh the
+    coverage map.
+
+25. **Build check**:
+
+    Detect and run the project build using the appropriate command for the
+    stack. If the build fails, fix the errors and re-run until it passes.
+
+    The full test suite was already executed by the `tests-reviewer` lens in
+    step 23 — refer back to that report for status and do not run tests again
+    here unless you made fixes that warrant re-verification.
 
 26. **Report QA results**:
 
     ```
     ## QA Results
 
-    **Code review**: <passed / <N> critical issues (user acknowledged) / <N> issues fixed>
-    **Build**: <passed / skipped / failed (user skipped)>
-    **Tests**: <passed (N tests) / skipped / failed (N failures, user skipped)>
+    **Parallel review verdict**: <CLEAN | LOW | MEDIUM | HIGH | CRITICAL>
+    **Findings**: <N> critical, <N> high, <N> medium, <N> low
+                   (<M> fixed, <K> deferred with engineer acknowledgement)
+    **Coverage map**: <all files reviewed | <N> files unreviewed (re-dispatched)>
+    **Test suite**: <passed (N tests) | <K> failures fixed | <K> failures deferred>
+    **Build**: <passed | skipped | failed (user skipped)>
     ```
 
     Proceed to Phase 6.

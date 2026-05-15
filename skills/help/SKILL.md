@@ -15,6 +15,7 @@ Orchestrates OpenSpec + Tracey + Ralph loop for engineer-led, AI-executed delive
   /spec-deliver:spec-deliver "<idea>"   Full workflow: explore → propose → review → deliver → verify → archive → PR
   /spec-deliver:spec-deliver <change> --skip-explore  Skip explore, go straight to propose
   /spec-deliver:ralph-deliver <change>  Launch Ralph loop only (standalone delivery)
+  /spec-deliver:parallel-review [base]  8-agent parallel review (Phase 5 uses this; standalone-callable)
   /spec-deliver:help                    This help text
 
 ## Workflow
@@ -24,7 +25,7 @@ Orchestrates OpenSpec + Tracey + Ralph loop for engineer-led, AI-executed delive
   3. Generates specs with Tracey markers         ← proposal, specs, design, tasks
   4. Presents specs for your review              ← QUALITY GATE: edit or approve
   5. Ralph loop delivers autonomously            ← TDD + Tracey annotations
-  6. QA: code review + build + tests              ← QA GATE (sub-agent review, build, tests)
+  6. QA: parallel review + build                  ← QA GATE (/parallel-review fans out 8 specialist reviewers in parallel, including tests-reviewer which runs the suite)
   7. Verifies coverage + archives                ← tracey_status + opsx:verify
   8. Creates PR                                  ← with full traceability
 

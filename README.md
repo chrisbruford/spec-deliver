@@ -102,7 +102,17 @@ Just run `/spec-deliver` again — it detects the state file and resumes.
 | `/spec-deliver:init` | Bootstrap project with OpenSpec + Tracey |
 | `/spec-deliver "<idea>"` | Full orchestrated workflow |
 | `/ralph-deliver <change>` | Standalone Ralph loop delivery |
+| `/spec-deliver:parallel-review [base]` | 8-agent parallel code review (used by Phase 5; standalone-callable) |
 | `/spec-deliver:help` | Show help |
+
+### Bundled Review Stack
+
+The plugin ships an `agents/` directory with 8 single-lens specialist reviewers
+(`qa-code-reviewer`, `adversarial-reviewer`, `security-reviewer`,
+`concurrency-reviewer`, `observability-reviewer`, `contract-reviewer`,
+`ops-reviewer`, `tests-reviewer`) and a `parallel-review` skill that fans them
+out in a single parallel dispatch. Phase 5 (QA) uses this stack; you can also
+call `/spec-deliver:parallel-review` standalone on any branch.
 
 ## How It Works
 
