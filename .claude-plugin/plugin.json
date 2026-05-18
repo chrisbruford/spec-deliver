@@ -1,6 +1,6 @@
 {
   "name": "spec-deliver",
-  "version": "3.6.1",
+  "version": "3.7.0",
   "description": "Spec-driven autonomous delivery: OpenSpec + Tracey traceability + Ralph loop. Orchestrates explore, propose, review, deliver, QA (8-agent parallel review), verify, archive, and PR.",
   "author": {
     "name": "Chris Bruford"

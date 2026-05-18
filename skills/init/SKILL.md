@@ -115,12 +115,35 @@ Tracey-integrated custom schema and creates the Tracey configuration.
    The scaffold already includes the correct wildcard include patterns and the
    archive exclude — do not manually construct the spec block.
 
-9. **Verify setup**:
-   ```bash
-   openspec schema which spec-driven-tracey
-   ```
+9. **Install the operator README**:
 
-10. **Display summary**:
+   Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/tracey-README.md` and write it to
+   `.config/tracey/README.md`. The README documents two structural quirks of
+   the Tracey setup (HCL not parseable; per-impl coverage denominator is the
+   same for every impl, so a shell impl will look like it has low coverage
+   when really the rules are JS-only) and explains the rule-authoring layout
+   the openspec CLI strict validator requires.
+
+10. **Install the CI gate**:
+
+    Create the workflows directory (no-op if it exists):
+    ```bash
+    mkdir -p .github/workflows
+    ```
+
+    Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/spec-validation.yaml` and write it
+    verbatim to `.github/workflows/spec-validation.yaml`. The workflow runs
+    `openspec validate --all --strict` and `tracey query validate` on every
+    PR and push to main, and fails the check on any error from either tool —
+    this is the regression guard that prevents the spec-driven workflow from
+    silently rotting.
+
+11. **Verify setup**:
+    ```bash
+    openspec schema which spec-driven-tracey
+    ```
+
+12. **Display summary**:
 
     ```
     ## Project Initialized for Spec-Driven Delivery
@@ -134,6 +157,8 @@ Tracey-integrated custom schema and creates the Tracey configuration.
     - openspec/config.yaml
     - openspec/schemas/spec-driven-tracey/ (schema + templates)
     - .config/tracey/config.styx
+    - .config/tracey/README.md
+    - .github/workflows/spec-validation.yaml
 
     ### Next steps
     - Run `/spec-deliver:spec-deliver "your idea"` to start your first feature

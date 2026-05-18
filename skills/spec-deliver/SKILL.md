@@ -143,6 +143,40 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
 
     This generates all artifacts (proposal.md, specs with Tracey markers, design.md, tasks.md).
 
+    **Format gotchas for generated specs.** OpenSpec's templates are written
+    to satisfy the strict validator, but when you (or sub-agents) hand-edit
+    requirement blocks after `opsx:propose` returns, keep these rules in
+    lock-step:
+
+    - **SHALL body BEFORE the `> r[id]` line.** The openspec CLI strict
+      validator reads the first non-blank line after `### Requirement:` and
+      checks for `SHALL`/`MUST`. If the rule-ID blockquote comes first, the
+      check fails with `Requirement must contain SHALL or MUST keyword`.
+      Correct shape:
+      ```markdown
+      ### Requirement: <name>
+
+      The system SHALL <do the thing>.
+
+      > r[<capability>.<id>]
+
+      #### Scenario: <name>
+      - **WHEN** ...
+      - **THEN** ...
+      ```
+    - **Delta headers only inside `openspec/changes/<name>/specs/`.** Use
+      `## ADDED Requirements`, `## MODIFIED Requirements`, etc. inside change
+      directories. Main specs at `openspec/specs/<capability>/spec.md` must
+      use `# <Capability> Specification`, `## Purpose`, `## Requirements`
+      headers — delta headers are rejected as structurally invalid for a
+      main spec.
+    - **Every Requirement needs at least one `#### Scenario:`** — the
+      validator rejects requirement blocks with zero scenarios.
+
+    The CI gate at `.github/workflows/spec-validation.yaml` (installed by
+    `/spec-deliver:init`) enforces all three on every PR. Save yourself a
+    red check by getting the format right at propose time.
+
 13. **Verify artifacts were created**:
 
     ```bash
