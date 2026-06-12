@@ -34,6 +34,24 @@ This skill can be used standalone or is called by `/spec-deliver:spec-deliver` d
    - Read `openspec/changes/<change-name>/design.md` (if it exists)
    - Read `openspec/config.yaml` for project context
 
+   While reading, extract three things that feed the assembled prompt:
+
+   a. **Constraints / out-of-scope** — anything the proposal or design says must
+      NOT change ("do NOT touch", "out of scope", "do not modify"), plus any
+      resolved decisions that must be honoured exactly. These become a hard
+      boundary in the prompt.
+
+   b. **Out-of-band / manual steps** — anything an autonomous agent cannot do:
+      provisioning, secrets, external dashboard or account settings, infra or
+      permission changes. The loop must be told NOT to attempt these so it does
+      not burn iterations on the impossible.
+
+   c. **Verification commands** — the repo's test, lint, type-check, and build
+      commands. Detect them from the proposal/design, `openspec/config.yaml`, or
+      the repo's conventions (`package.json` scripts, `Makefile`, `pyproject.toml`,
+      CI config under `.github/workflows/`). The loop gates on these, so they must
+      be concrete commands, not "run the tests".
+
 4. **Extract Tracey requirement IDs**:
    - Parse all spec files for Tracey markers matching the pattern `> r[...]`
    - Build a list of all requirement IDs (e.g., `data-export.user-can-export-data`)
@@ -82,32 +100,60 @@ This skill can be used standalone or is called by `/spec-deliver:spec-deliver` d
 
    <contents of tasks.md>
 
+   ## Constraints / Out of Scope
+
+   <constraints and out-of-scope items extracted from the proposal/design, or
+   "No explicit constraints recorded — stay within the scope of the tasks above.">
+
+   ## Verification Commands
+
+   <the repo's actual test / lint / type-check / build commands, one per line, or
+   "Detect from repo conventions before the first acceptance gate." if none could
+   be determined>
+
+   ## Out-of-Band Steps
+
+   <manual steps the loop must NOT attempt (provisioning, secrets, infra), or "None.">
+
    ## Delivery Instructions
 
-   Create an agent team to implement the tasks above. You decide the team
-   composition based on the nature of the work — the number of teammates,
-   their roles, and how to divide the work.
+   You are the **orchestrator**. Create an agent team to implement the tasks above
+   and coordinate it; you do NOT implement the tasks yourself, and you do NOT mark a
+   task done on a teammate's say-so. You decide the team composition — the number of
+   teammates, their roles, and how to divide the work — based on the nature of the
+   work. Alongside the implementers, run at least one independent **reviewer** (a QA
+   + adversarial lens) that reviews each diff before you accept it.
 
-   Each teammate must follow these rules:
+   ### Rules every implementer must follow
 
-   1. After completing each task, check it off in
-      openspec/changes/<change-name>/tasks.md by changing `- [ ]` to `- [x]`.
+   1. **Strict TDD — red→green evidence is mandatory for every code-bearing task:**
+      a. **Red:** write the failing test(s) for the requirement FIRST, annotated
+         `// r[verify <req-id>]`. Run them and confirm they fail **for the right
+         reason** — a real assertion failure, not an import/syntax/setup error. No
+         production code before a failing test exists for it.
+      b. **Green:** write the **minimum** code to pass, annotated
+         `// r[impl <req-id>]`. Run the test(s); confirm green.
+      c. **Refactor:** clean up while tests stay green.
+      d. **Evidence:** include the red→green transition (the failing output, then
+         the passing output) in the summary you return to the orchestrator, so TDD
+         can be verified as followed, not retrofitted.
+      Non-code tasks (docs, config, spec text) have no test — provide the exact diff
+      plus passing output of the relevant lint/validator command instead.
 
-   2. **Tracey annotations are MANDATORY**:
-      - Add `// r[impl <req-id>]` above every function/class that implements a requirement
-      - Add `// r[verify <req-id>]` above every test that verifies a requirement
-      - The requirement IDs are listed in parentheses on each task
+   2. **Tracey annotations are MANDATORY** — `// r[impl <req-id>]` above every
+      function/class that implements a requirement, `// r[verify <req-id>]` above
+      every test that verifies one. The requirement IDs are in parentheses on each
+      task.
 
-   3. **TDD cycle**: For each task:
-      a. Write a failing test with `r[verify ...]` annotation
-      b. Write minimum code to pass with `r[impl ...]` annotation
-      c. Refactor while tests pass
+   3. Do NOT write placeholder or stub implementations. Every function must be real.
 
-   4. After completing each task group, run `tracey_status` to check coverage progress.
+   4. Do NOT assume code doesn't exist — search first before implementing.
 
-   5. Do NOT write placeholder or stub implementations. Every function must be real.
+   5. **Respect the Constraints / Out of Scope section above** — do not modify
+      anything listed there, and honour every resolved decision exactly.
 
-   6. Do NOT assume code doesn't exist — search first before implementing.
+   6. Do NOT attempt the Out-of-Band Steps listed above. Note them as human action
+      items and move on; they do not block a task's acceptance.
 
    7. **Boy-scout rule** — leave code better than you found it:
       - You are encouraged to make targeted improvements to code encountered in the
@@ -121,15 +167,34 @@ This skill can be used standalone or is called by `/spec-deliver:spec-deliver` d
       - When in doubt, keep boy-scout changes small and targeted. A one-line fix is
         always welcome; a cross-cutting refactor is not unless it is unavoidable.
 
-   8. Commit work with descriptive messages after completing each task or logical group.
+   ### Orchestrator acceptance gate (run for EVERY task)
+
+   A task may only be marked `- [x]` in openspec/changes/<change-name>/tasks.md
+   after YOU — not the implementer — have independently confirmed ALL of:
+
+   - the change matches the spec/task and honours every resolved decision;
+   - (code tasks) the red→green evidence is real — the test genuinely failed first
+     for the right reason, then passed;
+   - the **Verification Commands** above (tests, lint, type-check, build) pass when
+     YOU re-run them yourself;
+   - nothing in the Constraints / Out of Scope section was touched;
+   - the independent reviewer has reviewed the diff and no blocking finding remains.
+
+   Read the diff yourself before accepting — never accept on the implementer's
+   report alone. If a task fails the gate, send the implementer one consolidated
+   list of required changes, then re-review when they report done. Repeat until it
+   passes, then check the task off and commit it with a descriptive message.
+
+   After each accepted task group, run `tracey_status` to check coverage progress.
 
    ## Completion Criteria
 
    This task is COMPLETE when ALL of the following are true:
-   - All tasks in tasks.md are checked off (`- [x]`)
-   - All <N> Tracey requirements have `impl` references in code
-   - All <N> Tracey requirements have `verify` references in tests
-   - All tests pass
+   - All tasks in tasks.md are checked off (`- [x]`) — each having passed the
+     orchestrator acceptance gate above;
+   - All <N> Tracey requirements have `impl` references in code;
+   - All <N> Tracey requirements have `verify` references in tests;
+   - The full verification suite passes — tests, lint, type-check, and build.
 
    When ALL criteria are met, output: <promise>RALPH_DELIVER_COMPLETE</promise>
    Do NOT output the promise until everything is genuinely done.
@@ -145,10 +210,13 @@ This skill can be used standalone or is called by `/spec-deliver:spec-deliver` d
    **Artifacts**: proposal.md, specs (N files), design.md, tasks.md
    **Tracey requirements**: N requirement IDs to cover
    **Max iterations**: N
-   **Completion gate**: All tasks done + full Tracey coverage
+   **Completion gate**: All tasks accepted + full Tracey coverage + tests/lint/type-check/build pass
 
    ### Requirement IDs
    <bulleted list of all r[...] IDs>
+
+   ### Human action items (out-of-band — the loop will NOT do these)
+   <bulleted list of out-of-band steps, or "None.">
 
    Launching Ralph loop...
    ```
@@ -207,5 +275,7 @@ After the Ralph loop completes (or hits max iterations):
 4. Suggest next steps:
    - If invoked via `/spec-deliver:spec-deliver`: return to the orchestrator — it
      will handle QA, verify, archive, and PR automatically.
-   - If complete (standalone): "Run `/opsx:verify` to validate, then `/opsx:archive` to archive."
+   - If complete (standalone): "The loop's per-task gate is not a substitute for a
+     full independent review. Run `/spec-deliver:parallel-review` for a multi-lens
+     pass, then `/opsx:verify` to validate, then `/opsx:archive` to archive."
    - If incomplete (standalone): "N requirements still uncovered. Review gaps and consider another `/spec-deliver:ralph-deliver` pass or manual implementation."
