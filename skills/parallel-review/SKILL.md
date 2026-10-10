@@ -79,9 +79,23 @@ The eight agents and their `subagent_type` values:
 
 Use the `Agent` tool with `subagent_type` set to each value above. **Send all eight in one message** — Claude Code parallelises Agent calls within a single message and serialises across messages.
 
+#### Optional 9th lens: ponytail-review
+
+If the `ponytail:ponytail-review` skill is in your available skills list (the user has installed the [ponytail](https://github.com/DietrichGebert/ponytail) plugin), add a ninth Agent call **in the same message**. If it is not listed, skip this lens silently — do not suggest installing it.
+
+- `subagent_type`: `general-purpose`
+- Lens: lean code — what should not exist or should be smaller (dead code, reuse an existing helper, stdlib/native instead of new code or a new dependency, YAGNI abstraction, near-copies to merge).
+- Prompt:
+
+  ```
+  Invoke the Skill tool with skill `ponytail:ponytail-review` to review the diff between `{base}` and `HEAD` on branch `{branch}` in `{cwd}`. Findings only — do not modify code. Return the skill's full report.
+  ```
+
+When aggregating, map its groups onto the shared scale: **Must fix → HIGH**, **Should fix → MEDIUM**, **Nice to have → LOW**. Attribute its findings to `ponytail-review`, and carry its `Lean: -<N> lines possible.` line into the final report's Next steps.
+
 ### 4. Aggregate
 
-When all eight agents return, you have eight structured reports. Build a combined report by:
+When all dispatched agents return (eight, or nine with ponytail-review), you have one structured report per agent. Build a combined report by:
 
 1. **Parse findings.** Each agent emits findings with: severity, file:line, lens, evidence, scenario, impact, suggestion.
 2. **Deduplicate.** Two findings are duplicates if they reference the same file:line range AND describe substantively the same issue (similar evidence, similar scenario). When deduping:
@@ -101,7 +115,7 @@ Produce a single combined report in this shape:
 
 **Diff:** <N> files, +<X> / -<Y> lines (~<Z> authored)
 **Date:** <YYYY-MM-DD>
-**Agents:** qa, adversarial, security, concurrency, observability, contract, ops, tests
+**Agents:** qa, adversarial, security, concurrency, observability, contract, ops, tests[, ponytail]
 **Overall verdict:** [CLEAN | LOW | MEDIUM | HIGH | CRITICAL]
 
 ## Test suite
@@ -136,7 +150,7 @@ Produce a single combined report in this shape:
 
 This pass is **complete** when:
 
-- All 8 agents returned without error.
+- All dispatched agents (8, or 9 with ponytail-review) returned without error.
 - Every file in the diff has at least one verdict from at least one agent (check the coverage map — flag uncovered files for re-review).
 - If documented threat-model docs exist in the repo, the adversarial and security reviewers both confirmed regression checks.
 - The test suite was attempted (passing or failing both count — only "unable to run" requires a flag in the report).
@@ -145,14 +159,14 @@ This is **not** "zero criticals" — that target is empirically unreachable with
 
 ### 7. If a sub-agent fails
 
-If one of the eight returns an error or empty report:
+If any dispatched agent returns an error or empty report:
 
 1. Do not silently drop it from the aggregation — flag it explicitly in the report:
    ```
    WARNING: {agent} did not complete successfully. Coverage gap in the {lens} lane.
    Consider re-running just that agent with: <Agent tool example>.
    ```
-2. Continue producing the aggregate from the other seven. A partial report is better than nothing, but the user must know it is partial.
+2. Continue producing the aggregate from the others. A partial report is better than nothing, but the user must know it is partial.
 
 ## Notes
 

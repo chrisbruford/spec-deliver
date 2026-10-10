@@ -114,6 +114,20 @@ The plugin ships an `agents/` directory with 8 single-lens specialist reviewers
 out in a single parallel dispatch. Phase 5 (QA) uses this stack; you can also
 call `/spec-deliver:parallel-review` standalone on any branch.
 
+If you also have the [ponytail](https://github.com/DietrichGebert/ponytail)
+plugin installed, `parallel-review` adds `/ponytail-review` as a ninth lens
+(lean code: what should not exist or should be smaller). Without ponytail it
+is skipped.
+
+Ponytail's SubagentStart hook injects its rules into every sub-agent,
+including the eight specialist reviewers, where they can work against the
+exhaustiveness mandate. To keep them out of the reviewers, add to the `env`
+block of `~/.claude/settings.json`:
+
+```json
+"PONYTAIL_SUBAGENT_MATCHER": "^(?!(spec-deliver:)?(qa-code|adversarial|security|concurrency|observability|contract|ops|tests)-reviewer$)"
+```
+
 ## How It Works
 
 ### The Custom Schema

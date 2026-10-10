@@ -303,6 +303,11 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     | ops | Deploy / rollback safety, migrations, feature flags, IaC, blast radius |
     | tests | Test quality AND runs the full test suite, reporting failures |
 
+    If the user has the ponytail plugin installed (`ponytail:ponytail-review`
+    is an available skill), a ninth `ponytail-review` lens (lean code: what
+    should not exist or should be smaller) joins the same fan-out. Otherwise
+    it is skipped.
+
     The skill aggregates findings into a single severity-sorted report with a
     coverage map and test-suite result. Wait for it to complete and capture the
     aggregated report.
