@@ -1,22 +1,20 @@
-schema: spec-driven-tracey
+schema: spec-driven
 
 context: |
   Tech stack: {{TECH_STACK}}
-  Requirement traceability: Tracey (prefix: r)
-  Autonomous delivery: Ralph loop via Claude Code plugin
-  All specs MUST include Tracey requirement markers (r[capability.requirement-name])
-  All implementation code MUST include r[impl ...] annotations
-  All test code MUST include r[verify ...] annotations
+  Delivery: spec-deliver delivers each task group test-first, and a gate checks the result.
 
 rules:
+  proposal:
+    - Keep it short. State why, what changes, and what is out of scope
+    - List anything an agent cannot do, such as provisioning or secrets, under an "Out-of-band steps" heading, and keep those steps out of tasks.md
   specs:
-    - Every requirement MUST have a Tracey marker blockquote (> r[capability.requirement-name]) immediately after the ### Requirement heading
-    - Tracey IDs use the pattern capability.kebab-requirement-name where capability matches the spec folder name
-    - Use SHALL/MUST for normative requirements, never should/may
-    - Every requirement MUST have at least one testable scenario
-  tasks:
-    - Each task MUST reference the Tracey requirement ID(s) it implements in parentheses
-    - Include explicit tasks for writing tests with r[verify ...] annotations
-    - Order tasks to implement tests before or alongside production code (TDD)
+    - Use SHALL or MUST in every requirement body, never should or may
+    - Every requirement MUST have at least one scenario that a test can prove
+    - Write the fewest requirements that cover the change
   design:
-    - Note which Tracey requirement IDs are affected by each design decision
+    - Record only decisions a reader could not work out from the code. A stub is fine for a small change
+  tasks:
+    - Group tasks under numbered headings such as "## 1. Add export endpoint". Fresh agents deliver each group, so it must make sense on its own
+    - Mark a group with no tests of its own as "(no-test)" and a behaviour-preserving group as "(refactor)" in its heading
+    - Do not add separate tasks for writing tests. Delivery writes each group's tests first

@@ -47,37 +47,21 @@ if [[ ":$PATH:" != *":$NPM_GLOBAL/bin:"* ]]; then
   done
 fi
 
+# The version delivery is tested against. Change it with the CI scaffold.
+OPENSPEC_PIN=1.12.0
+
 # Install or update OpenSpec
 if command -v openspec &>/dev/null; then
   CURRENT=$(openspec --version 2>/dev/null || echo "unknown")
-  info "OpenSpec $CURRENT already installed, checking for updates..."
-  npm install -g @fission-ai/openspec 2>&1 | tail -1
+  info "OpenSpec $CURRENT already installed, installing pinned $OPENSPEC_PIN..."
+  npm install -g "@fission-ai/openspec@$OPENSPEC_PIN" 2>&1 | tail -1
 else
   info "Installing OpenSpec..."
-  npm install -g @fission-ai/openspec 2>&1 | tail -1
+  npm install -g "@fission-ai/openspec@$OPENSPEC_PIN" 2>&1 | tail -1
 fi
 
 OPENSPEC_VERSION=$(openspec --version 2>/dev/null || echo "unknown")
 ok "OpenSpec $OPENSPEC_VERSION installed at $(which openspec)"
-
-# Verify ralph-loop plugin is available
-if [ -d "$HOME/.claude/plugins" ]; then
-  RALPH_FOUND=$(find "$HOME/.claude/plugins" -name "ralph-loop" -type d 2>/dev/null | head -1)
-  if [ -n "$RALPH_FOUND" ]; then
-    ok "Ralph loop plugin found"
-  else
-    info "Ralph loop plugin not detected. Install it via: /plugin install ralph-loop@claude-plugins-official"
-  fi
-fi
-
-# Verify Tracey MCP is available
-if [ -f "$HOME/.claude/settings.json" ]; then
-  if grep -q "tracey" "$HOME/.claude/settings.json" 2>/dev/null; then
-    ok "Tracey MCP detected in settings"
-  else
-    info "Tracey MCP not detected in settings. Ensure it's configured as an MCP server."
-  fi
-fi
 
 echo ""
 ok "Device setup complete!"
@@ -85,4 +69,4 @@ echo ""
 echo "Next steps:"
 echo "  1. Open a project directory"
 echo "  2. Run /spec-deliver:init to set up the project"
-echo "  3. Run /spec-deliver \"your idea\" to start delivering"
+echo "  3. Run /spec-deliver:spec-deliver \"your idea\" to start delivering"

@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Workflow(spec-deliver:deliver)",
+      "Workflow(spec-deliver:review)",
+      "Bash(spec-deliver-gate:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git mv:*)",
+      "Bash(git rm:*)",
+      "Bash(git switch:*)",
+      "Bash(git branch:*)",
+      "Bash(git symbolic-ref:*)",
+      "Bash(git merge-base:*)",
+      "Bash(openspec:*)",
+      "Bash(gh pr view:*)",
+      "Bash(rm .config/spec-deliver/state.local.md)",
+      "Read",
+      "Write",
+      "Edit"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)"
+    ]
+  }
+}

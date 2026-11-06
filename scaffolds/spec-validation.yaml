@@ -1,15 +1,7 @@
 name: Spec validation
 
-# Gates every PR against both the openspec CLI strict validator (catches
-# malformed Requirement blocks, missing Purpose/Requirements sections, missing
-# scenarios, etc.) and the Tracey validator (catches `r[impl|verify <id>]`
-# annotations referring to rule IDs that no longer exist in any spec).
-#
-# This workflow is the regression guard for the spec-driven-delivery workflow.
-# If either check fails, the PR is blocked until the spec/code drift is
-# resolved.
-#
-# See `.config/tracey/README.md` for guidance on resolving failures.
+# Gates every PR on the openspec strict validator, which catches malformed
+# requirement blocks, missing scenarios and missing SHALL or MUST keywords.
 
 on:
   pull_request:
@@ -35,22 +27,8 @@ jobs:
         with:
           node-version: 22
 
-      # OpenSpec CLI — validates spec format, Purpose/Requirements structure,
-      # SHALL/MUST detection on every requirement, and scenario presence.
       - name: Install openspec
-        run: npm install -g @fission-ai/openspec@^1.3
+        run: npm install -g @fission-ai/openspec@1.12.0
 
       - name: openspec validate --all --strict
         run: openspec validate --all --strict
-
-      # Tracey — validates rule-ID references in code. `tracey query validate`
-      # exits non-zero when any `r[impl|verify <id>]` reference points to a
-      # rule that does not exist in the openspec specs.
-      - name: Install Tracey
-        run: |
-          curl --proto '=https' --tlsv1.2 -LsSf \
-            https://github.com/bearcove/tracey/releases/latest/download/tracey-installer.sh | sh
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-
-      - name: tracey query validate
-        run: tracey query validate

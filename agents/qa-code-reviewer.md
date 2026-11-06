@@ -161,6 +161,14 @@ Present your review in this structured format:
 [Things done well that should be acknowledged]
 ```
 
+## Severity Scale
+
+- **Critical:** Wrong behaviour on a main path, or data loss. Must fix before merge.
+- **High:** A bug under realistic conditions. Must fix before merge.
+- **Medium:** A defect or maintainability problem with limited blast radius.
+- **Low:** A minor issue worth noting.
+- **Info:** An observation, not a flaw.
+
 ## Behavioral Guidelines
 
 1. **Be constructive, not critical**: Frame feedback as improvements, not criticisms. Explain the "why" behind every suggestion.
