@@ -61,6 +61,8 @@ Bootstrap a project for spec-driven delivery.
    build: npm run build
    ```
 
+   If a command runs a script in this repo, add a `protect:` line covering it, because the gate protects the verify file but not the scripts it calls. `protect:` replaces the default list, so copy the defaults from `bin/spec-deliver-gate` into it.
+
    `test` should be the fastest command that runs the whole suite. If the repo has no tests, leave out `test` and mark every group `(no-test)`.
 
 7. **Add permissions**. Unattended agents need allow rules, and plugins cannot ship permissions. Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/claude-settings.json` and merge it into `.claude/settings.json`: append to the `permissions` lists and leave every other key and existing rule alone.

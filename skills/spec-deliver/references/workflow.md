@@ -68,7 +68,9 @@ Every `label: command` line runs, and any other line that is not a comment is an
 | `test-files: <regex>` | Replaces the default pattern for what counts as a test file |
 | `protect: <regex>` | Replaces the default protected paths |
 
-The defaults protect the verify file, CI workflows, Claude settings, stable specs, the change's spec, proposal and design, and common test runner config. If a change must edit a protected path, set `protect:` before approval.
+The defaults protect the verify file, CI workflows, Claude settings, stable specs, the change's spec, proposal and design, and common test runner config. If a change must edit a protected path, set `protect:` before approval. `protect:` replaces the defaults, so keep the ones you still want.
+
+The gate runs verify commands from the approved commit, but not the scripts they call. If a verify command runs a repo script, add that script to `protect:`, along with any manifest that defines the command, such as `package.json`.
 
 ## Commit Trailers
 
