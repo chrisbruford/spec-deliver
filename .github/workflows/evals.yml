@@ -1,0 +1,45 @@
+name: Evals
+
+# Every run is a paid model call, so this runs on release or by hand, never per PR.
+# Needs the ANTHROPIC_API_KEY repository secret.
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: >
+          claude plugin eval .
+          --trust-plugin
+          --ablation none
+          --model claude-sonnet-5-5
+          --threshold 0.8
+          --no-publish
+          --max-cost-usd 20
+          --json results.json
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: eval-results
+          path: results.json

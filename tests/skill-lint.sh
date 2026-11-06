@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regression checks for defects that live in skill text, where no runtime test can reach them.
 set -u
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 fail=0
 check() { # check <description> <command...>
   local desc=$1; shift

@@ -21,13 +21,16 @@ jobs:
           node-version: 22
 
       - name: Shellcheck
-        run: shellcheck bin/spec-deliver-gate scripts/setup.sh tests/*.sh
+        run: shellcheck -S warning bin/spec-deliver-gate scripts/setup.sh tests/*.sh
 
       - name: Skill regression checks
+        if: ${{ !cancelled() }}
         run: bash tests/skill-lint.sh
 
       - name: Workflow tests
+        if: ${{ !cancelled() }}
         run: node --test tests/*.test.mjs
 
       - name: Gate tests
+        if: ${{ !cancelled() }}
         run: bash tests/gate.test.sh

@@ -164,7 +164,7 @@ case "$MODE" in
     if [ -n "$(trailer_commit Green-For "$GROUP")" ]; then CURRENT=green
     elif [ -z "$RED" ]; then CURRENT=none
     elif red_checked "$GROUP" "$RED"; then CURRENT=red
-    else CURRENT=red-unchecked
+    else CURRENT='red-unchecked'
     fi
     finish 0 PASS "state=$CURRENT"
     ;;
