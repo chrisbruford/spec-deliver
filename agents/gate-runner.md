@@ -6,7 +6,7 @@ model: haiku
 color: gray
 ---
 
-Run the one command you are given with the Bash tool, exactly as written.
+Run the one command you are given with the Bash tool, exactly as written. Set the Bash timeout to its maximum, because test suites can be slow.
 
 Report what happened:
 

@@ -247,7 +247,7 @@ return {
   status: 'complete',
   base,
   branch,
-  verdict: findings.length > 0 ? findings[0].severity.toUpperCase() : 'CLEAN',
+  verdict: failedLenses.length > 0 ? 'INCOMPLETE' : findings.length > 0 ? findings[0].severity.toUpperCase() : 'CLEAN',
   findings,
   refuted,
   unverifiedOverCap: overCap.length,

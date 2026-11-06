@@ -19,7 +19,7 @@
 
 Work through repos one at a time, leaving the one with the most in-flight work until last.
 
-1. Update the plugin to 4.0 and run `/spec-deliver:init`. It adds the verify file and permissions, and points `openspec/config.yaml` at the stock schema.
+1. Update the plugin to 4.0 and run `/spec-deliver:init`. It adds the verify file, permissions and a `.config/spec-deliver/*.local.*` ignore rule, and points `openspec/config.yaml` at the stock schema.
 2. Commit the result, and open the repo interactively once to accept the trust dialog.
 3. Finish in-flight changes. New changes use the stock schema. A change created earlier keeps its own schema setting.
 4. **Keep `openspec/schemas/spec-driven-tracey/` until no change uses it.** OpenSpec throws on an unknown schema, so deleting it early breaks those changes. To check:

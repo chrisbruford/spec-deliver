@@ -368,6 +368,158 @@ APPROVED=$(git rev-parse HEAD)
 red_commit
 expect 2 'no-test-command' 'red needs a test command' -- red --approved "$APPROVED" --group 1
 
+# --- found by adversarial review ----------------------------------------------
+
+# Rewrites the verify file and approves it. Sets $APPROVED.
+approve_verify() {
+  printf '%s\n' "$@" > .config/spec-deliver/verify
+  commit -m config
+  git commit -q --no-verify --allow-empty -m 'approve' -m 'Spec-Approved: c'
+  APPROVED=$(git rev-parse HEAD)
+}
+
+node_repo stdin-swallow
+approve_verify 'test: cat >/dev/null' 'lint: false'
+expect 1 'label=lint' 'a command reading stdin cannot swallow later checks' -- baseline --approved "$APPROVED"
+
+node_repo bad-label
+approve_verify 'test: node --test' 'type_check: false' 'Build: true'
+expect 1 'label=type_check' 'labels with underscores or capitals still run' -- baseline --approved "$APPROVED"
+
+node_repo no-space
+approve_verify 'test:false'
+expect 1 'verify-failed' 'a label with no space after the colon still runs' -- baseline --approved "$APPROVED"
+
+node_repo bad-line
+approve_verify 'test: node --test' 'npm run lint'
+expect 2 'bad-verify-line' 'a line that is not label: command is an error' -- baseline --approved "$APPROVED"
+
+node_repo bad-protect
+approve_verify 'test: node --test' 'protect: ('
+expect 2 'bad-pattern' 'an invalid protect pattern is an error, not a pass' -- baseline --approved "$APPROVED"
+
+node_repo bad-test-files
+approve_verify 'test: node --test' 'test-files: ('
+expect 2 'bad-pattern' 'an invalid test-files pattern is an error, not a pass' -- baseline --approved "$APPROVED"
+
+node_repo bad-since
+echo '// edit' >> math.test.js; commit -m edit
+expect 2 'bad-since' 'an unknown --since is an error, not a pass' -- task --approved "$APPROVED" --group 2 --no-test --since deadbeef
+
+node_repo unicode-protected
+red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null
+mkdir -p .github/workflows; echo x > .github/workflows/déploy.yml; implement
+expect 1 'protected-path' 'non-ASCII paths cannot dodge protected patterns' -- task --approved "$APPROVED" --group 1
+
+node_repo unicode-test
+mkdir -p tests; echo a > tests/données.json; commit -m seed
+git commit -q --no-verify --allow-empty -m 'approve' -m 'Spec-Approved: c'
+APPROVED=$(git rev-parse HEAD)
+red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null
+echo b > tests/données.json; implement
+expect 1 'test-edited' 'non-ASCII paths cannot dodge the test pattern' -- task --approved "$APPROVED" --group 1
+
+node_repo no-implementation
+printf 'impl.js\n' >> .gitignore; commit -m ignore
+git commit -q --no-verify --allow-empty -m 'approve' -m 'Spec-Approved: c'
+APPROVED=$(git rev-parse HEAD)
+red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null
+echo 'exports.mul = (a, b) => a * b' > impl.js
+sed -i.bak "s#require('./math')#require('./impl')#" mul.test.js; rm mul.test.js.bak
+git update-index --assume-unchanged mul.test.js
+expect 1 'no-implementation' 'task needs a tracked change beyond the tests' -- task --approved "$APPROVED" --group 1
+
+node_repo missing-runner
+approve_verify 'test: no-such-runner-xyz'
+red_commit
+expect 2 'test-not-runnable' 'a missing test runner is not a red' -- red --approved "$APPROVED" --group 1
+
+node_repo wide-red
+mkdir -p tests; : > tests/a_test.js
+i=0; while [ $i -lt 3000 ]; do : > "zz$i.txt"; i=$((i + 1)); done
+commit -m 'wide' -m 'Red-For: 1'
+expect 0 'PASS' 'a very wide red commit still finds its test file' -- status --approved "$APPROVED" --group 1
+"$GATE" red --approved "$APPROVED" --group 1 | tail -1 | grep -q 'no-test-files' && bad 'a very wide red commit is not misread as having no tests' || ok 'a very wide red commit is not misread as having no tests'
+
+node_repo local-files
+echo r > .config/spec-deliver/review-x.local.md
+expect 0 'PASS' 'local review files do not count as dirt' -- baseline --approved "$APPROVED"
+git add -f .config/spec-deliver/review-x.local.md; commit -m oops
+expect 0 'PASS' 'a committed local file is not a protected-path failure' -- task --approved "$APPROVED" --group 2 --no-test
+
+node_repo accept-staged
+red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null; implement
+"$GATE" task --approved "$APPROVED" --group 1 >/dev/null
+echo '// unverified' >> math.js; git add math.js
+expect 1 'dirty-tree' 'accept refuses staged work' -- accept --approved "$APPROVED" --group 1 --change c
+
+node_repo accept-commit-fails
+red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null; implement
+"$GATE" task --approved "$APPROVED" --group 1 >/dev/null
+printf '#!/bin/sh\nexit 1\n' > .git/hooks/reference-transaction; chmod +x .git/hooks/reference-transaction
+expect 2 'commit-failed' 'accept reports a failed commit' -- accept --approved "$APPROVED" --group 1 --change c
+rm .git/hooks/reference-transaction
+[ -z "$(git status --porcelain)" ] && ok 'a failed accept leaves the tree clean' || bad 'a failed accept leaves the tree clean' "$(git status --porcelain)"
+
+node_repo indented-tasks
+printf '## 1. Multiply\n\n- [ ] 1.1 Parent\n  - [ ] 1.1.1 Child\n' > openspec/changes/c/tasks.md; commit -m tasks
+git commit -q --no-verify --allow-empty -m 'approve' -m 'Spec-Approved: c'
+APPROVED=$(git rev-parse HEAD)
+green_group
+grep -q '^  - \[x\] 1.1.1' openspec/changes/c/tasks.md && ok 'accept ticks indented tasks and keeps their indent' || bad 'accept ticks indented tasks and keeps their indent'
+expect 0 'PASS' 'final passes with indented tasks' -- final --approved "$APPROVED" --change c
+
+node_repo group-ids
+printf '## 1. A\n\n- [ ] a\n\n## 1.0 B\n\n- [ ] b\n\n## 01. C\n\n- [ ] c\n' > openspec/changes/c/tasks.md; commit -m tasks
+git commit -q --no-verify --allow-empty -m 'approve' -m 'Spec-Approved: c'
+APPROVED=$(git rev-parse HEAD)
+green_group
+[ "$(grep -c '^- \[x\]' openspec/changes/c/tasks.md)" = 1 ] && ok 'group ids compare as text, so 1 is not 01' || bad 'group ids compare as text, so 1 is not 01'
+
+node_repo code-as-notest
+red_commit; git reset -q --hard HEAD~1
+echo docs > README.md; commit -m skip
+"$GATE" task --approved "$APPROVED" --group 1 --no-test >/dev/null
+"$GATE" accept --approved "$APPROVED" --group 1 --change c --no-test skip >/dev/null
+accept_docs
+expect 1 'no-test-not-allowed' 'tampering: a code group cannot go green with --no-test' -- final --approved "$APPROVED" --change c
+
+node_repo quick-notest
+echo docs > README.md; commit -m skip
+"$GATE" task --approved "$APPROVED" --group 1 --no-test >/dev/null
+"$GATE" accept --approved "$APPROVED" --group 1 --no-test skip >/dev/null
+expect 1 'no-test-not-allowed' 'tampering: a quick delivery with a test command cannot skip red' -- final --approved "$APPROVED"
+
+node_repo drop-group
+green_group
+sed -i.bak '/^## 2/,$d' openspec/changes/c/tasks.md; rm openspec/changes/c/tasks.md.bak; commit -m 'drop group 2'
+expect 1 'group-not-delivered' 'tampering: deleting an undelivered group from tasks.md fails' -- final --approved "$APPROVED" --change c
+
+node_repo delete-after-green
+green_group; accept_docs
+git rm -q mul.test.js; commit -m 'qa: delete'
+expect 1 'test-deleted' 'tampering: deleting a group test after green fails' -- final --approved "$APPROVED" --change c
+
+node_repo bad-red-trailer
+green_group; accept_docs
+git commit -q --no-verify --allow-empty -m 'open red' -m 'Red-For: .*'
+expect 1 'bad-trailer' 'a regex in a Red-For trailer is rejected' -- final --approved "$APPROVED" --change c
+
+node_repo status-base
+expect 0 "base=$(git rev-parse --short "$APPROVED")" 'status reports the approval as the first base' -- status --approved "$APPROVED" --group 1
+green_group
+GREEN=$(git rev-parse --short HEAD)
+expect 0 "base=$GREEN" 'status reports the last accepted group as the base' -- status --approved "$APPROVED" --group 2
+echo docs > README.md; commit -m wip
+expect 0 "base=$GREEN" 'the base survives commits made inside a group' -- status --approved "$APPROVED" --group 2
+
+node_repo default-patterns
+for f in conftest.py __mocks__/a.js fixtures/a.json e2e/a.cy.ts Tests/Helpers.cs; do
+  mkdir -p "$(dirname "$f")"; echo x > "$f"; commit -m "$f" -m 'Red-For: 1'
+  expect 1 'passes-at-red' "$f counts as a test file" -- red --approved "$APPROVED" --group 1
+  git reset -q --hard HEAD~1
+done
+
 # --- other stacks ------------------------------------------------------------
 
 python_cycle() {

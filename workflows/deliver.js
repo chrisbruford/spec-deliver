@@ -19,8 +19,9 @@ const groups = input.groups
 
 const refusal = (() => {
   if (!SAFE_SHA.test(input.approvedSha || '')) return 'missing or invalid approvedSha'
-  if (input.change !== undefined && !SAFE_CHANGE.test(input.change)) return 'invalid change name'
-  if (input.change === undefined && !input.brief) return 'needs a change or a brief'
+  const hasChange = input.change !== undefined && input.change !== null
+  if (hasChange && !SAFE_CHANGE.test(input.change)) return 'invalid change name'
+  if (!hasChange && !input.brief) return 'needs a change or a brief'
   if (!Array.isArray(groups) || groups.length === 0) return 'no groups to deliver'
   for (const group of groups) {
     if (!SAFE_ID.test(group.id || '')) return `invalid group id: ${group.id}`
@@ -95,6 +96,7 @@ async function gate(mode, group, extra = '') {
 }
 
 const headOf = line => /head=(\S+)/.exec(line)?.[1] ?? ''
+const baseOf = line => /base=(\S+)/.exec(line)?.[1] ?? ''
 const sameCommit = (a, b) => Boolean(a && b) && (a.startsWith(b) || b.startsWith(a))
 
 const groundRules = `Working rules:
@@ -218,6 +220,7 @@ try {
     }
 
     // A resumed group is red on purpose, so only a fresh start can demand a green baseline.
+    if (!SAFE_SHA.test(baseOf(status.line))) throw stop('status-failed', group.id, status.line)
     if (state === 'none' && !baselineChecked) {
       const baseline = await gate('baseline')
       if (!baseline.ok) throw stop('baseline-failed', group.id, `${baseline.line}\n${baseline.tail}`)
@@ -225,7 +228,8 @@ try {
     baselineChecked = true
 
     phase('Deliver')
-    const startHead = headOf(status.line)
+    // The gate works this out from commits, so a resumed group keeps its real starting point.
+    const startHead = baseOf(status.line)
     if (group.kind === 'code') {
       if (state === 'none') {
         await writeTests(group)

@@ -67,7 +67,7 @@ If the result's status is `refused`, report the reason and stop. Otherwise write
 <positives>
 ```
 
-Show the user the verdict, finding counts, gaps and report path.
+Show the user the verdict, finding counts, gaps and report path. `INCOMPLETE` means a lens failed, so the review cannot be called clean.
 
 ### 5. Close any gaps
 

@@ -88,6 +88,11 @@ test('a failed lens is flagged, not dropped silently', async () => {
   assert.deepEqual(result.failedLenses, ['security'])
 })
 
+test('a failed lens makes the verdict incomplete, even with no findings', async () => {
+  const { result } = await run(base, world({ lens: { security: () => null } }))
+  assert.equal(result.verdict, 'INCOMPLETE')
+})
+
 test('refuted findings are removed and counted', async () => {
   const { result } = await run(base, world({
     lens: { qa: () => report([finding()]) },

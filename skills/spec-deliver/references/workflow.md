@@ -38,9 +38,9 @@
 | `baseline` | Clean tree, verify commands pass |
 | `status` | Reports `none`, `red-unchecked`, `red` or `green` for a group |
 | `red` | HEAD is the group's `Red-For` commit, it touches a test file, and the test command fails |
-| `task` | Clean tree, protected paths intact, no test edits since red, verify commands pass |
+| `task` | Clean tree, protected paths intact, no test edits since red, a tracked code change since red, verify commands pass |
 | `accept` | `task` passed at this exact HEAD; ticks the group and commits `Green-For` |
-| `final` | All of the above across every group, every task ticked, verify commands pass |
+| `final` | All of the above across every group, every approved group delivered, group tests still present, every task ticked, verify commands pass |
 
 The last line of output is always `GATE <mode> <PASS|FAIL|ERROR> ...`. Exit codes are 0 pass, 1 fail, 2 usage or configuration error.
 
@@ -61,7 +61,7 @@ lint: npm run lint
 build: npm run build
 ```
 
-Every `label: command` line runs. `test` is the command `gate red` expects to fail. Two keys are reserved:
+Every `label: command` line runs, and any other line that is not a comment is an error. `test` is the command `gate red` expects to fail. Two keys are reserved:
 
 | Key | Purpose |
 | --- | --- |
@@ -86,14 +86,14 @@ Set in the `tasks.md` heading, for example `## 3. Update docs (no-test)`.
 | Kind | Red step | Test edits |
 | --- | --- | --- |
 | `code` (default) | Yes | Only in the test writer's commit |
-| `no-test` | No | Not checked; verify commands still run |
+| `no-test` | No | Not checked; verify commands still run. `gate final` rejects this kind unless the approved heading says so |
 | `refactor` | No | None allowed, so behaviour is pinned by existing tests |
 
 ## Stacks
 
 - **Compiled languages**: a test referencing a missing symbol fails to compile, which says nothing about behaviour. The test writer commits signature stubs so the failure is an assertion.
 - **Pre-commit hooks**: hooks may reject failing tests, so `--no-verify` is allowed on red commits only.
-- **Slow suites**: `gate red` runs the full `test` command once per group.
+- **Slow suites**: `gate red` runs the full `test` command once per group. A gate call must finish inside the Bash tool's maximum timeout of 10 minutes, so point `test` at something faster if the suite takes longer.
 
 ## State File
 
@@ -115,7 +115,9 @@ Original idea text here
 
 ## Resume
 
-Run `/spec-deliver:spec-deliver` again. It reads the state file and reconciles it with disk. Inside delivery, resume comes from commits and `tasks.md`: `gate status` reports each group's state, so finished groups are skipped and a group left at red continues with its implementer.
+Run `/spec-deliver:spec-deliver` again. It reads the state file and reconciles it with disk. Inside delivery, `gate status` reports each group's state, so finished groups are skipped and a group left at red continues with its implementer.
+
+The gate's records live in `.git/spec-deliver/`, so a delivery belongs to one clone. In a fresh clone, `gate final` reports `red-not-checked` because the proof that red failed is gone. Finish on the original clone, or have the engineer accept the gap in the evidence pack.
 
 ## Done Means
 
