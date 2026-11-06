@@ -111,9 +111,9 @@ expect 0 'PASS' 'baseline passes on a clean green tree' -- baseline --approved "
 echo dirt > dirt.txt
 expect 1 'dirty-tree' 'baseline fails on a dirty tree' -- baseline --approved "$APPROVED"
 rm dirt.txt
-mkdir -p .claude && echo state > .claude/spec-deliver.local.md
+echo state > .config/spec-deliver/state.local.md
 expect 0 'PASS' 'the state file does not count as dirt' -- baseline --approved "$APPROVED"
-rm -rf .claude
+rm .config/spec-deliver/state.local.md
 echo 'exports.add = () => 0' > math.js
 commit -m broke
 expect 1 'verify-failed' 'baseline fails when verify commands fail' -- baseline --approved "$APPROVED"

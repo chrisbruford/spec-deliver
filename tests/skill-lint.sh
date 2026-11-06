@@ -50,7 +50,10 @@ check "the workflow finds the red log through git" absent '\.git/spec-deliver/' 
 for rule in 'git switch' 'git branch' 'git symbolic-ref' 'openspec'; do
   check "settings allow $rule" grep -q "Bash($rule:\*)" "$C"
 done
-check "settings allow removing the state file" grep -q 'Bash(rm .claude/spec-deliver.local.md)' "$C"
+check "settings allow removing the state file" grep -q 'Bash(rm .config/spec-deliver/state.local.md)' "$C"
+# .claude/ is a protected directory: writes there are refused unattended and prompt interactively.
+check "nothing the plugin writes at run time lives in .claude" bash -c '! grep -rnE "\.claude/(spec-deliver|review-)" skills bin workflows scaffolds README.md'
+check "init ignores local state" grep -q '.config/spec-deliver/\*.local.\*' "$I"
 check "creating a PR asks a human" grep -q 'Bash(gh pr create:\*)' "$C"
 
 exit $fail

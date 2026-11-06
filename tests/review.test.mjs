@@ -71,6 +71,11 @@ test('lenses use plugin-prefixed agents', async () => {
   assert.equal(calls.find(c => c.label === 'lens security').agentType, 'spec-deliver:security-reviewer')
 })
 
+test('reviewers are told allow rules match single commands', async () => {
+  const { calls } = await run(base, world())
+  assert.match(calls.find(c => c.label === 'lens tests').prompt, /one command per Bash call/i)
+})
+
 test('ponytail runs only when asked', async () => {
   const off = await run(base, world())
   assert.equal(lensesRun(off.calls).includes('ponytail'), false)

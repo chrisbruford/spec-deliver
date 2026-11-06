@@ -12,6 +12,7 @@
 | `--max-iterations` | Removed. The workflow has its own retry and agent limits |
 | Forked `spec-driven-tracey` schema | Stock `spec-driven`, plus rules in `openspec/config.yaml` |
 | `r[...]` requirement markers | Scenario-to-test table in `evidence.md` |
+| `.claude/spec-deliver.local.md` | `.config/spec-deliver/state.local.md`, because `.claude/` is protected from unattended writes. Delete the old file |
 | Experimental agent teams | Not needed. `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` can go |
 
 ## Per repo

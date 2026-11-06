@@ -21,7 +21,7 @@ set -uo pipefail
 
 DEFAULT_TEST_FILES='(^|/)(tests?|__tests__|specs?)/|[._-](test|spec)s?\.[^/]+$|(^|/)test_[^/]+$|Tests?\.[^/]+$|\.Tests?/'
 DEFAULT_PROTECT='^\.config/spec-deliver/|^\.github/workflows/|^\.claude/settings|^openspec/specs/|^openspec/changes/[^/]+/(specs/|proposal\.md|design\.md)|(^|/)(jest|vitest|karma|playwright|cypress)\.config\.|(^|/)(pytest\.ini|tox\.ini|\.mocharc[^/]*|\.nycrc[^/]*|\.runsettings)$'
-STATE_FILE='.claude/spec-deliver.local.md'
+STATE_FILE='.config/spec-deliver/state.local.md'
 
 MODE=${1:-}
 [ $# -gt 0 ] && shift

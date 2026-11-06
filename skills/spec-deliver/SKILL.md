@@ -45,14 +45,14 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 3. **Check for a state file**:
 
    ```bash
-   test -f .claude/spec-deliver.local.md && echo "EXISTS" || echo "NOT_FOUND"
+   test -f .config/spec-deliver/state.local.md && echo "EXISTS" || echo "NOT_FOUND"
    ```
 
    If it exists and `$ARGUMENTS` names a different change, ask the user whether to resume the old change or abandon it. Abandoning deletes the state file and leaves its branch and commits alone. Otherwise, if it exists, go to Phase 0A. If it does not, go to step 7.
 
 ### Phase 0A: Resume
 
-4. **Read the state file** at `.claude/spec-deliver.local.md`. Extract `change`, `branch`, `phase`, `tier` and `approved_sha`.
+4. **Read the state file** at `.config/spec-deliver/state.local.md`. Extract `change`, `branch`, `phase`, `tier` and `approved_sha`.
 
    If `git branch --show-current` differs from `branch`, run `git switch <branch>`. Never resume on another branch, because the next commit would land there.
 
@@ -98,7 +98,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 
    The first command prints the default branch as `origin/<name>`. If it fails, assume `main`. If the current branch is the default branch, run `git switch -c spec/<change-name>`. If you are already on another branch, stay on it. If the current branch is empty (detached HEAD), stop and ask the user to check out a branch.
 
-9. **Create the state file** at `.claude/spec-deliver.local.md`:
+9. **Create the state file** at `.config/spec-deliver/state.local.md`:
 
    ```markdown
    ---
@@ -266,7 +266,7 @@ Skip this phase for `--quick`.
 27. **Clean up**. Delivery is complete once the state file is gone:
 
     ```bash
-    rm .claude/spec-deliver.local.md
+    rm .config/spec-deliver/state.local.md
     ```
 
 28. **Final summary**:

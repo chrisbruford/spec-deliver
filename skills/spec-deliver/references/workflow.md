@@ -97,7 +97,7 @@ Set in the `tasks.md` heading, for example `## 3. Update docs (no-test)`.
 
 ## State File
 
-`.claude/spec-deliver.local.md` tracks progress:
+`.config/spec-deliver/state.local.md` tracks progress:
 
 ```yaml
 ---

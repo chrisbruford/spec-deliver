@@ -19,7 +19,7 @@
       "Bash(git merge-base:*)",
       "Bash(openspec:*)",
       "Bash(gh pr view:*)",
-      "Bash(rm .claude/spec-deliver.local.md)",
+      "Bash(rm .config/spec-deliver/state.local.md)",
       "Read",
       "Write",
       "Edit"

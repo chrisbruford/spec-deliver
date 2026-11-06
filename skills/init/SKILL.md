@@ -71,7 +71,7 @@ Bootstrap a project for spec-driven delivery.
 
 8. **Ignore local state**. Add this line to `.gitignore` if it is not already covered:
    ```
-   .claude/*.local.*
+   .config/spec-deliver/*.local.*
    ```
 
 9. **Install the CI check**:

@@ -44,7 +44,7 @@ Tell the user the review has started, then **end your turn**. The completion not
 
 ### 4. Write the report
 
-If the result's status is `refused`, report the reason and stop. Otherwise write the report to `openspec/changes/<change>/review.md` when `--change` was given, or to `.claude/review-<branch>.local.md` when it was not, replacing `/` with `-` in the branch name so the file stays git-ignored.
+If the result's status is `refused`, report the reason and stop. Otherwise write the report to `openspec/changes/<change>/review.md` when `--change` was given, or to `.config/spec-deliver/review-<branch>.local.md` when it was not, replacing `/` with `-` in the branch name so the file stays git-ignored.
 
 ```markdown
 # Review: {branch} → {base}

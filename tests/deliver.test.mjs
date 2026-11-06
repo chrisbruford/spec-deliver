@@ -128,6 +128,11 @@ test('the implementer gets 2 retries, then the run stops', async () => {
   assert.equal(calls.some(c => modeOf(c) === 'accept'), false)
 })
 
+test('the group reviewer is told allow rules match single commands', async () => {
+  const { calls } = await run(base, world())
+  assert.match(calls.find(c => c.label.startsWith('review')).prompt, /one command per Bash call/i)
+})
+
 test('a retry tells the implementer why it failed', async () => {
   let tries = 0
   const { result, calls } = await run(base, world({ task: () => (++tries === 1 ? failed('task', 'verify-failed') : pass('task')) }))

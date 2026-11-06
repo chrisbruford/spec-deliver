@@ -125,7 +125,9 @@ const reviewPrompt = `Review the diff between \`${base}\` and \`HEAD\` on branch
 Diff size: ${stats || `${files.length} files`}
 
 Follow your prompt: apply the exhaustiveness mandate, the diff-walk loop and the final re-read. Findings only, do not modify code.
-Return every finding, list each file you reviewed in filesReviewed, and put what is done well in positives.`
+Return every finding, list each file you reviewed in filesReviewed, and put what is done well in positives.
+
+Read files with the Read tool. Run one command per Bash call, with no pipes, semicolons or chaining: allow rules match single commands, so anything else is refused.`
 
 const ponytailPrompt = `Invoke the Skill tool with skill \`ponytail:ponytail-review\` to review the diff between \`${base}\` and \`HEAD\` on branch \`${branch}\`. Findings only, do not modify code.
 Report its Must fix findings as High, Should fix as Medium, and Nice to have as Low. List each file you reviewed in filesReviewed.`
