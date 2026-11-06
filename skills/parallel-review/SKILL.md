@@ -68,14 +68,14 @@ The eight agents and their `subagent_type` values:
 
 | # | Agent | Lens one-liner |
 |---|---|---|
-| 1 | `qa-code-reviewer` | General correctness, readability, idiomatic style, dead code, adherence to codebase patterns. |
-| 2 | `adversarial-reviewer` | Hostile-persona stress testing — attacker, confused user, grizzled veteran, chaos monkey, compliance auditor, pre-mortem analyst. |
-| 3 | `security-reviewer` | Auth, credentials, secrets, threat-model regressions, injection, SSRF, crypto correctness. |
-| 4 | `concurrency-reviewer` | Races, ordering, atomicity, crash windows, lock-step writes, replay/idempotency, async correctness. |
-| 5 | `observability-reviewer` | Log hygiene, metrics, traces, error context, on-call signal, runbook integration. |
-| 6 | `contract-reviewer` | API / wire-protocol back-compat, schema changes, env-var contracts, public exports, breaking changes. |
-| 7 | `ops-reviewer` | Deploy / rollback safety, migrations, feature flags, container / k8s / IaC, blast radius. |
-| 8 | `tests-reviewer` | Coverage of net-new code paths, real-bug-catching power, test isolation, mocking discipline. Also runs the test suite. |
+| 1 | `spec-deliver:qa-code-reviewer` | General correctness, readability, idiomatic style, dead code, adherence to codebase patterns. |
+| 2 | `spec-deliver:adversarial-reviewer` | Hostile-persona stress testing — attacker, confused user, grizzled veteran, chaos monkey, compliance auditor, pre-mortem analyst. |
+| 3 | `spec-deliver:security-reviewer` | Auth, credentials, secrets, threat-model regressions, injection, SSRF, crypto correctness. |
+| 4 | `spec-deliver:concurrency-reviewer` | Races, ordering, atomicity, crash windows, lock-step writes, replay/idempotency, async correctness. |
+| 5 | `spec-deliver:observability-reviewer` | Log hygiene, metrics, traces, error context, on-call signal, runbook integration. |
+| 6 | `spec-deliver:contract-reviewer` | API / wire-protocol back-compat, schema changes, env-var contracts, public exports, breaking changes. |
+| 7 | `spec-deliver:ops-reviewer` | Deploy / rollback safety, migrations, feature flags, container / k8s / IaC, blast radius. |
+| 8 | `spec-deliver:tests-reviewer` | Coverage of net-new code paths, real-bug-catching power, test isolation, mocking discipline. Also runs the test suite. |
 
 Use the `Agent` tool with `subagent_type` set to each value above. **Send all eight in one message** — Claude Code parallelises Agent calls within a single message and serialises across messages.
 

@@ -248,7 +248,7 @@ Each individual finding must follow this structure:
 - **Suggestion:** [specific, actionable mitigation — not generic advice]
 ```
 
-## Impact Scale
+## Severity Scale
 
 - **Critical:** Actively exploitable with immediate business impact (data breach, financial loss, complete service failure). Requires a concrete exploit path.
 - **High:** Realistic failure scenario under expected operating conditions. Requires a plausible trigger.

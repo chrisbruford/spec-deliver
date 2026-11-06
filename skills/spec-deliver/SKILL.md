@@ -40,7 +40,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
    ```
 
    **If EXISTS** — proceed to **Phase 0A: Resume**.
-   **If NOT_FOUND** — proceed to **Phase 1: Explore** (or Phase 2 if `--skip-explore`).
+   **If NOT_FOUND** — proceed to **Phase 1: Explore**. With `--skip-explore`, still run steps 8 and 9, skip only step 10, then go to Phase 2.
 
 ### Phase 0A — Resume
 
@@ -67,7 +67,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
    d. Check if change was already archived:
 
    ```bash
-   test -d "openspec/changes/archive/*-${CHANGE}" && echo "ARCHIVED" || echo "NOT_ARCHIVED"
+   ls -d openspec/changes/archive/*-"${CHANGE}" >/dev/null 2>&1 && echo "ARCHIVED" || echo "NOT_ARCHIVED"
    ```
 
 5. **Determine actual phase** by reconciling state file with disk:
@@ -78,6 +78,7 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
    | proposing       | Partial artifacts        | proposing (re-run propose)      |
    | reviewing       | All artifacts present    | reviewing (re-ask for approval) |
    | delivering      | Mix of [x] and [ ] tasks | delivering (re-launch ralph)    |
+   | delivering      | All tasks [x]            | qa (delivery finished)          |
    | qa              | All tasks [x]            | qa (re-run build + tests)       |
    | verifying       | All tasks [x]            | verifying (run verify)          |
    | archiving       | Change not archived      | archiving (run archive)         |
@@ -103,7 +104,19 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
    - If the input is already kebab-case with no spaces, use it as the change name
    - Otherwise, derive a kebab-case name from the idea (e.g., "add user authentication" → `add-user-auth`)
 
-9. **Create the state file** at `.claude/spec-deliver.local.md`:
+9. **Create a working branch**. Never deliver on the default branch:
+
+   ```bash
+   DEFAULT=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
+   CURRENT=$(git branch --show-current)
+   ```
+
+   If `CURRENT` equals `DEFAULT` (or `main` when `DEFAULT` is empty), run
+   `git switch -c spec/<change-name>`. If you are already on another branch,
+   stay on it. If `CURRENT` is empty (detached HEAD), stop and ask the user to
+   check out a branch.
+
+   **Then create the state file** at `.claude/spec-deliver.local.md`:
 
    ```markdown
    ---
@@ -372,6 +385,9 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     **Build**: <passed | skipped | failed (user skipped)>
     ```
 
+    If step 24 or 25 changed anything, commit the QA fixes now with a
+    descriptive message, so Phase 8 pushes them.
+
     Proceed to Phase 6.
 
 ### Phase 6 — Verify
@@ -444,6 +460,9 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
     conflicts in the spec files themselves and require manual resolution before
     creating the PR.
 
+    Then commit the archive output (the synced `openspec/specs/` deltas and the
+    moved change directory) with a descriptive message.
+
 ### Phase 8 — PR
 
 34. **Create a pull request**:
@@ -464,15 +483,13 @@ See [workflow reference](references/workflow.md) for the end-to-end flow diagram
         - Tracey coverage percentage
         - Link to archived specs
 
-35. **Clean up state file**:
+35. **Clean up state file**. Delivery is complete once it is gone:
 
     ```bash
     rm .claude/spec-deliver.local.md
     ```
 
-36. **Update state file**: Change `phase: archiving` to `phase: complete`.
-
-37. **Final summary**:
+36. **Final summary**:
 
     ```
     ## Delivery Complete: <change-name>
