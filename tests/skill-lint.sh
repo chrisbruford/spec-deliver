@@ -29,6 +29,7 @@ check "no references to retired tools" bash -c '! grep -rnIiE "ralph|tracey|opsx
 check "the approval commit carries the trailer the gate needs" grep -q 'Spec-Approved: <change-name>' "$S"
 check "the skill ends its turn after starting the workflow" grep -q 'end your turn' "$S"
 check "the final gate runs in the main session" grep -q 'Do not delegate it' "$S"
+check "the licence the manifest claims exists" grep -q "MIT License" LICENSE
 check "plugin manifest points at the new repo" grep -q 'chrisbruford/spec-deliver' .claude-plugin/plugin.json
 
 # Found by reading the skills as a model would. Each of these dead-ended or corrupted a run.
