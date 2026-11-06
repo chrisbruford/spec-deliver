@@ -124,8 +124,10 @@ Before leaving delivery to run:
 bash tests/skill-lint.sh               # regression checks on skill text
 node --test tests/*.test.mjs           # workflow control flow, with fake agents
 bash tests/gate.test.sh                # gate behaviour against throwaway repos
-claude plugin eval . --max-cost-usd 5  # paid: real model calls
+claude plugin eval . --ablation none --no-publish --max-cost-usd 5
 ```
+
+The last command is a local check, not part of CI. It runs real model calls through your Claude Code login, so no API key is needed. Run it before a release.
 
 ## License
 
