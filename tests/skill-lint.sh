@@ -53,6 +53,10 @@ done
 check "settings allow removing the state file" grep -q 'Bash(rm .config/spec-deliver/state.local.md)' "$C"
 # .claude/ is a protected directory: writes there are refused unattended and prompt interactively.
 check "nothing the plugin writes at run time lives in .claude" bash -c '! grep -rnE "\.claude/(spec-deliver|review-)" skills bin workflows scaffolds README.md'
+# The first end-to-end run only passed because these were allowed by hand.
+check "the skill needs no shell commands beyond the allow rules" bash -c '! grep -nE "command -v|test -[fd] |^ *ls -d" skills/spec-deliver/SKILL.md'
+check "the skill states the single-command rule" grep -q 'one command per Bash call' "$S"
+check "a denied command is not read as Bash being unavailable" grep -qi 'one denied command does not mean' "$S"
 check "init ignores local state" grep -q '.config/spec-deliver/\*.local.\*' "$I"
 check "creating a PR asks a human" grep -q 'Bash(gh pr create:\*)' "$C"
 

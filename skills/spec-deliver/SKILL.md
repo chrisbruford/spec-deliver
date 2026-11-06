@@ -9,6 +9,10 @@ Take a change from idea to PR, with human checkpoints and automatic resume.
 
 See the [workflow reference](references/workflow.md) for the flow, the gate and the commit trailers.
 
+## Running commands
+
+Run one command per Bash call, with no `;`, `&&` or pipes, because allow rules match single commands. Use Read and Glob rather than `cat`, `ls` or `test`. One denied command does not mean Bash is unavailable: rewrite it as a single command, or use another tool, before deciding you are blocked.
+
 ## Tiers
 
 | Tier | Use for | Spec | Human checkpoints |
@@ -39,14 +43,10 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 2. **Check prerequisites**:
 
    - The Workflow tool must be available. If it is not, stop and say: "spec-deliver needs dynamic workflows. Enable Dynamic workflows in `/config`, or ask your admin if `disableWorkflows` is set."
-   - `command -v spec-deliver-gate` must succeed. If it does not, stop and say the plugin is not enabled in this session.
+   - Run `spec-deliver-gate` with no arguments. It prints a `GATE none ERROR` line, which proves it is installed. If the command is not found, stop and say the plugin is not enabled in this session.
    - `.config/spec-deliver/verify` must exist. If it does not, stop and tell the user to run `/spec-deliver:init`.
 
-3. **Check for a state file**:
-
-   ```bash
-   test -f .config/spec-deliver/state.local.md && echo "EXISTS" || echo "NOT_FOUND"
-   ```
+3. **Check for a state file** at `.config/spec-deliver/state.local.md`, using Glob.
 
    If it exists and `$ARGUMENTS` names a different change, ask the user whether to resume the old change or abandon it. Abandoning deletes the state file and leaves its branch and commits alone. Otherwise, if it exists, go to Phase 0A. If it does not, go to step 7.
 
@@ -56,11 +56,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 
    If `git branch --show-current` differs from `branch`, run `git switch <branch>`. Never resume on another branch, because the next commit would land there.
 
-5. **Reconcile with disk**:
-
-   ```bash
-   ls -d openspec/changes/archive/*-"${CHANGE}" >/dev/null 2>&1 && echo "ARCHIVED" || echo "NOT_ARCHIVED"
-   ```
+5. **Reconcile with disk**. Use Glob on `openspec/changes/archive/*-<change>` to see whether the change is archived.
 
    For standard and high-risk tiers, also count `- [x]` and `- [ ]` in `openspec/changes/<change>/tasks.md`, and run `openspec status --change "<change>" --json`.
 
