@@ -48,11 +48,13 @@ If the request touches auth, payments, personal data or migrations and `--high-r
    test -f .claude/spec-deliver.local.md && echo "EXISTS" || echo "NOT_FOUND"
    ```
 
-   If it exists, go to Phase 0A. Otherwise go to step 7.
+   If it exists and `$ARGUMENTS` names a different change, ask the user whether to resume the old change or abandon it. Abandoning deletes the state file and leaves its branch and commits alone. Otherwise, if it exists, go to Phase 0A. If it does not, go to step 7.
 
 ### Phase 0A: Resume
 
-4. **Read the state file** at `.claude/spec-deliver.local.md`. Extract `change`, `phase`, `tier` and `approved_sha`.
+4. **Read the state file** at `.claude/spec-deliver.local.md`. Extract `change`, `branch`, `phase`, `tier` and `approved_sha`.
+
+   If `git branch --show-current` differs from `branch`, run `git switch <branch>`. Never resume on another branch, because the next commit would land there.
 
 5. **Reconcile with disk**:
 
@@ -74,7 +76,9 @@ If the request touches auth, payments, personal data or migrations and `--high-r
    | archiving | Change not archived | archiving |
    | any | Change archived | PR |
 
-   Quick deliveries have no tasks file, so trust the state file's phase.
+   Quick deliveries have no tasks file, so trust the state file's phase. Their acceptance criteria live in the approval commit, so recover them with `git show -s --format=%b <approved_sha>`. If the phase is still `reviewing`, write the criteria again.
+
+   If the phase is `delivering` or later, check the approval with `git merge-base --is-ancestor <approved_sha> HEAD`. If `approved_sha` is empty or not an ancestor of HEAD, tell the user and go back to Phase 3. A state file from 3.x has no approval, and the workflow refuses to run without one.
 
 6. **Show a resume summary** with the change, phase, tier and task progress, then jump to that phase.
 
@@ -85,17 +89,21 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 8. **Create a working branch**. Never deliver on the default branch:
 
    ```bash
-   DEFAULT=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
-   CURRENT=$(git branch --show-current)
+   git symbolic-ref --short refs/remotes/origin/HEAD
    ```
 
-   If `CURRENT` equals `DEFAULT` (or `main` when `DEFAULT` is empty), run `git switch -c spec/<change-name>`. If you are already on another branch, stay on it. If `CURRENT` is empty (detached HEAD), stop and ask the user to check out a branch.
+   ```bash
+   git branch --show-current
+   ```
+
+   The first command prints the default branch as `origin/<name>`. If it fails, assume `main`. If the current branch is the default branch, run `git switch -c spec/<change-name>`. If you are already on another branch, stay on it. If the current branch is empty (detached HEAD), stop and ask the user to check out a branch.
 
 9. **Create the state file** at `.claude/spec-deliver.local.md`:
 
    ```markdown
    ---
    change: <change-name>
+   branch: <current branch>
    phase: exploring
    tier: <quick|standard|high-risk>
    approved_sha:
@@ -169,7 +177,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 
     - `approvedSha`: the state file's `approved_sha`.
     - `change`: the change name. Omit it for `--quick`, and pass `brief` with the acceptance criteria instead.
-    - `groups`: one `{id, title, kind}` per group in `tasks.md` that still has unticked tasks. `id` is the heading number, and `kind` is `code`, `no-test` or `refactor`. For `--quick`, use `[{id: "1", title: "<summary>", kind: "code"}]`.
+    - `groups`: one `{id, title, kind}` per group in `tasks.md` that still has unticked tasks. `id` is the heading number, and `kind` is `code`, `no-test` or `refactor`. For `--quick`, use `[{id: "1", title: "<summary>", kind: "code"}]`. If the verify file has no `test` line, there is nothing to run red against, so use `kind: "no-test"`.
     - `constraints`: anything the proposal or design says must not change, plus resolved decisions.
     - `maxOutputTokens`: the `--max-output-tokens` value, if given.
 
@@ -179,7 +187,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 
 18. **When the workflow finishes**, read its result:
 
-    - `complete`: continue. For `--high-risk` with groups left, show what the group changed, ask for sign-off with AskUserQuestion, then repeat step 17 for the next group.
+    - `complete`: continue. For `--high-risk`, sign-off covers every group, including the last: show what the group changed and ask with AskUserQuestion, then repeat step 17 if groups remain.
     - `stopped`: report `reason`, `group` and `detail`, and ask the user how to proceed. Do not work around a stop. Rerunning resumes from commits.
     - `refused`: report the reason and stop.
 
@@ -199,7 +207,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 
     After fixes, run the verify commands again. Rerun the review only if fixes were extensive.
 
-21. If anything changed, commit the QA fixes now with a descriptive message, so Phase 8 pushes them.
+21. **Commit**. If `--change` was used, always commit the review report. If anything else changed, commit the QA fixes too, so Phase 8 pushes them. `git status --porcelain` must be empty before Phase 6, because the gate fails on a dirty tree.
 
 ### Phase 6: Verify
 
@@ -225,7 +233,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
     <the final gate's last line, and the verify commands it ran>
 
     ## Red to green
-    <per group: tail of .git/spec-deliver/<group>.red.log, showing why the tests failed first, or the no-test reason>
+    <per group: tail of spec-deliver/<group>.red.log under `git rev-parse --absolute-git-dir`, showing why the tests failed first, or the no-test reason>
 
     ## Scenarios
     | Scenario | Test |
@@ -251,7 +259,7 @@ Skip this phase for `--quick`.
 
 ### Phase 8: PR
 
-26. **Create the pull request**. Push the branch and run `gh pr create`. Build the body from the evidence pack: summary, gate result, scenario table, review verdict, deferred items and human action items. Link the archived change.
+26. **Create the pull request**. Run `gh pr view` first: if a PR already exists for this branch, push and skip to the next step. Otherwise push the branch and run `gh pr create`. Build the body from the evidence pack: summary, gate result, scenario table, review verdict, deferred items and human action items. Link the archived change.
 
     Merging stays with a human. Say so in your summary.
 

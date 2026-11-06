@@ -183,7 +183,7 @@ Return the short HEAD sha. Set blocked to a reason if you cannot proceed, otherw
       `${groupBrief(group)}
 
 Review the diff ${startHead}..HEAD for this group. This is one independent check before the group is accepted, not the full review.
-Read the red log at .git/spec-deliver/${group.id}.red.log if it exists, and confirm the tests failed for the right reason.
+Run git rev-parse --absolute-git-dir, then read spec-deliver/${group.id}.red.log under that directory if it exists, and confirm the tests failed for the right reason.
 Report as blocking only what must change before acceptance: a spec scenario with no real test, a vacuous or hardcoded test, code built only to satisfy a test, wrong behaviour, or a weakened test command in a manifest such as package.json.
 Do not report style.`,
       { label: `review ${group.id}`, agentType: 'spec-deliver:qa-code-reviewer', schema: REVIEW_SCHEMA, phase: 'Deliver' },

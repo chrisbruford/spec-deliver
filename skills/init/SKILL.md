@@ -100,13 +100,14 @@ Bootstrap a project for spec-driven delivery.
 
     ### Created or updated
     - openspec/config.yaml
+    - .claude/skills/openspec-* and .claude/commands/opsx/ (from openspec init)
     - .config/spec-deliver/verify
     - .claude/settings.json
     - .gitignore
     - .github/workflows/spec-validation.yaml
 
     ### Before your first delivery
-    - Commit these files.
+    - Commit all of these. Delivery needs a clean tree.
     - Open this repo interactively once and accept the trust dialog. Allow rules are ignored in untrusted workspaces.
     - Protect the default branch.
 

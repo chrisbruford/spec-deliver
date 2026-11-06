@@ -102,6 +102,7 @@ Set in the `tasks.md` heading, for example `## 3. Update docs (no-test)`.
 ```yaml
 ---
 change: add-user-auth
+branch: spec/add-user-auth
 phase: delivering       # exploring | proposing | reviewing | delivering | qa | verifying | archiving
 tier: standard          # quick | standard | high-risk
 approved_sha: 1a2b3c4

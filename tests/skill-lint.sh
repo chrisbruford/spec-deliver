@@ -31,4 +31,26 @@ check "the skill ends its turn after starting the workflow" grep -q 'end your tu
 check "the final gate runs in the main session" grep -q 'Do not delegate it' "$S"
 check "plugin manifest points at the new repo" grep -q 'chrisbruford/spec-deliver' .claude-plugin/plugin.json
 
+# Found by reading the skills as a model would. Each of these dead-ended or corrupted a run.
+I=skills/init/SKILL.md
+C=scaffolds/claude-settings.json
+check "the review report is committed before the clean-tree gate" grep -q 'always commit the review report' "$S"
+check "the local report name cannot contain a slash" grep -qi 'replacing `/` with `-`' "$P"
+check "resume returns to the change branch" grep -q 'git switch <branch>' "$S"
+check "a different change does not resume an old state file" grep -qi 'names a different change' "$S"
+check "resume without a valid approval goes back to Phase 3" grep -qi 'not an ancestor of HEAD' "$S"
+check "quick resume recovers the criteria from the approval commit" grep -q 'git show -s --format=%b' "$S"
+check "quick handles repos with no test command" grep -qi 'no `test` line' "$S"
+check "high-risk asks for sign-off on the last group too" grep -qi 'every group, including the last' "$S"
+check "init tells the user to commit the OpenSpec tool files" grep -q '.claude/commands/opsx/' "$I"
+check "the branch step is single commands, with no pipe" absent 'symbolic-ref.*\|' "$S"
+check "the PR step checks for an existing PR" grep -q 'gh pr view' "$S"
+check "red log paths work in a worktree" absent '\.git/spec-deliver/' "$S"
+check "the workflow finds the red log through git" absent '\.git/spec-deliver/' workflows/deliver.js
+for rule in 'git switch' 'git branch' 'git symbolic-ref' 'openspec'; do
+  check "settings allow $rule" grep -q "Bash($rule:\*)" "$C"
+done
+check "settings allow removing the state file" grep -q 'Bash(rm .claude/spec-deliver.local.md)' "$C"
+check "creating a PR asks a human" grep -q 'Bash(gh pr create:\*)' "$C"
+
 exit $fail
