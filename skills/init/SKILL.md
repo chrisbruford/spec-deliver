@@ -1,18 +1,15 @@
 ---
-description: "Initialize a project for spec-driven delivery with OpenSpec + Tracey"
+description: "Initialize a project for spec-driven delivery: OpenSpec, verify commands, permissions and the CI check"
 argument-hint: "[--tech-stack \"TypeScript, C#\"]"
 ---
 
 # Spec Deliver: Init
 
-Bootstrap a project for spec-driven autonomous delivery. Sets up OpenSpec with the
-Tracey-integrated custom schema and creates the Tracey configuration.
+Bootstrap a project for spec-driven delivery.
 
 ## Steps
 
-1. **Parse arguments** from `$ARGUMENTS`:
-   - Look for `--tech-stack "<value>"` (or `-s "<value>"`). Extract and remove it.
-   - If not provided, it will be asked for later.
+1. **Parse arguments** from `$ARGUMENTS`. Look for `--tech-stack "<value>"` (or `-s "<value>"`). If it is not provided, detect it in step 3.
 
 2. **Check prerequisites**:
 
@@ -31,136 +28,88 @@ Tracey-integrated custom schema and creates the Tracey configuration.
    ```bash
    test -d openspec && echo "EXISTS" || echo "NOT_FOUND"
    ```
-   If EXISTS, ask: "This project already has OpenSpec initialized. Do you want to re-run init? This will overwrite the schema and configs but preserve existing specs and changes."
-   If user declines, stop.
+   If EXISTS, ask: "This project already has OpenSpec. Re-run init? This rewrites `openspec/config.yaml` and the CI check, and keeps specs, changes, schemas and an existing verify file." If the user declines, stop.
 
-3. **Detect project context** (if `--tech-stack` not provided):
+3. **Detect the tech stack** (if `--tech-stack` was not provided):
 
-   Analyze the project to infer the tech stack:
-   - Check for `package.json`, `tsconfig.json` → TypeScript
-   - Check for `*.csproj`, `*.sln` → C#
-   - Check for `go.mod` → Go
-   - Check for `Cargo.toml` → Rust
-   - Check for `requirements.txt`, `pyproject.toml` → Python
-   - Check for `Gemfile` → Ruby
+   - `package.json`, `tsconfig.json`: TypeScript
+   - `*.csproj`, `*.sln`: C#
+   - `go.mod`: Go
+   - `Cargo.toml`: Rust
+   - `requirements.txt`, `pyproject.toml`: Python
+   - `Gemfile`: Ruby
 
-   Present the detected stack and ask the user to confirm or adjust:
-   > Detected tech stack: **TypeScript, C#**
-   > Is this correct, or would you like to adjust?
-
-   Use AskUserQuestion for this.
+   Present the result and use AskUserQuestion to let the user confirm or adjust it.
 
 4. **Initialize OpenSpec**:
    ```bash
    openspec init --tools claude --profile core
    ```
 
-5. **Install the custom schema**:
+5. **Create the OpenSpec config**. Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/openspec-config.yaml`, replace `{{TECH_STACK}}`, and write the result to `openspec/config.yaml`.
 
-   Copy the Tracey-integrated schema from the plugin scaffolds:
+   This uses the stock `spec-driven` schema. If `openspec/schemas/spec-driven-tracey/` exists, leave it: changes pinned to it fail without it. See `${CLAUDE_PLUGIN_ROOT}/docs/MIGRATION.md`.
+
+6. **Create the verify file**, unless `.config/spec-deliver/verify` already exists. These commands define done for every delivery, so they must be concrete.
+
+   Detect them from `package.json` scripts, `Makefile`, `pyproject.toml`, and CI config under `.github/workflows/`. Then use AskUserQuestion to confirm them. Write one `label: command` per line:
+
+   ```
+   # What "done" means. spec-deliver reads this from the approved commit.
+   test: npm test
+   lint: npm run lint
+   build: npm run build
+   ```
+
+   `test` should be the fastest command that runs the whole suite. If the repo has no tests, leave out `test` and mark every group `(no-test)`.
+
+7. **Add permissions**. Unattended agents need allow rules, and plugins cannot ship permissions. Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/claude-settings.json` and merge it into `.claude/settings.json`: append to the `permissions` lists and leave every other key and existing rule alone.
+
+   Also add one `Bash(<command>:*)` allow rule per verify command, for example `Bash(npm test:*)`.
+
+   Show the user the rules you added. `git push` is an `ask` rule on purpose: a human confirms every push, and background agents cannot push.
+
+8. **Ignore local state**. Add this line to `.gitignore` if it is not already covered:
+   ```
+   .claude/*.local.*
+   ```
+
+9. **Install the CI check**:
+
    ```bash
-   mkdir -p openspec/schemas/spec-driven-tracey/templates
+   mkdir -p .github/workflows
    ```
 
-   Then use the Write tool to copy each file from `${CLAUDE_PLUGIN_ROOT}/scaffolds/schema/` to `openspec/schemas/spec-driven-tracey/`:
-   - Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/schema/schema.yaml` and write to `openspec/schemas/spec-driven-tracey/schema.yaml`
-   - Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/schema/templates/proposal.md` and write to `openspec/schemas/spec-driven-tracey/templates/proposal.md`
-   - Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/schema/templates/spec.md` and write to `openspec/schemas/spec-driven-tracey/templates/spec.md`
-   - Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/schema/templates/design.md` and write to `openspec/schemas/spec-driven-tracey/templates/design.md`
-   - Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/schema/templates/tasks.md` and write to `openspec/schemas/spec-driven-tracey/templates/tasks.md`
+   Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/spec-validation.yaml` and write it verbatim to `.github/workflows/spec-validation.yaml`. It runs `openspec validate --all --strict` on every PR and on pushes to main. Run the repo's verify commands in CI too, because consumer CI backs up the gate.
 
-6. **Validate the schema**:
-   ```bash
-   openspec schema validate spec-driven-tracey
-   ```
-   If validation fails, report the error and stop.
-
-7. **Create OpenSpec config**:
-
-   Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/openspec-config.yaml` as a template.
-   Replace `{{TECH_STACK}}` with the detected/provided tech stack string.
-   Write the result to `openspec/config.yaml`.
-
-8. **Create Tracey config**:
-
-   Create the directory:
-   ```bash
-   mkdir -p .config/tracey
-   ```
-
-   Build the impl blocks based on the detected tech stack. For each detected language,
-   generate an `impl` block with appropriate include/exclude globs:
-
-   **TypeScript**: `include (src/**/*.ts src/**/*.tsx)`, `exclude (node_modules/** dist/** build/**)`
-   **C#**: `include (**/*.cs)`, `exclude (bin/** obj/** **/bin/** **/obj/**)`
-   **Go**: `include (**/*.go)`, `exclude (vendor/**)`
-   **Rust**: `include (crates/**/*.rs src/**/*.rs)`, `exclude (target/**)`
-   **Python**: `include (**/*.py)`, `exclude (__pycache__/** .venv/** venv/**)`
-   **Ruby**: `include (**/*.rb)`, `exclude (vendor/**)`
-
-   Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/tracey-config.styx` as a template.
-   Replace `{{IMPLS}}` with the generated impl blocks for the detected languages,
-   one block per language. Each impl block must use this styx format:
-
-   ```
-   {
-       name typescript
-       include (src/**/*.ts src/**/*.tsx)
-       exclude (node_modules/** dist/** build/**)
-   }
-   ```
-
-   Write the result to `.config/tracey/config.styx`.
-
-   The scaffold already includes the correct wildcard include patterns and the
-   archive exclude — do not manually construct the spec block.
-
-9. **Install the operator README**:
-
-   Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/tracey-README.md` and write it to
-   `.config/tracey/README.md`. The README documents two structural quirks of
-   the Tracey setup (HCL not parseable; per-impl coverage denominator is the
-   same for every impl, so a shell impl will look like it has low coverage
-   when really the rules are JS-only) and explains the rule-authoring layout
-   the openspec CLI strict validator requires.
-
-10. **Install the CI gate**:
-
-    Create the workflows directory (no-op if it exists):
+10. **Verify setup**:
     ```bash
-    mkdir -p .github/workflows
+    openspec schema which spec-driven
+    spec-deliver-gate baseline --approved HEAD
     ```
+    The gate call is expected to report `not-approved`, which proves it is on `PATH`. Any other error needs fixing.
 
-    Read `${CLAUDE_PLUGIN_ROOT}/scaffolds/spec-validation.yaml` and write it
-    verbatim to `.github/workflows/spec-validation.yaml`. The workflow runs
-    `openspec validate --all --strict` and `tracey query validate` on every
-    PR and push to main, and fails the check on any error from either tool —
-    this is the regression guard that prevents the spec-driven workflow from
-    silently rotting.
-
-11. **Verify setup**:
-    ```bash
-    openspec schema which spec-driven-tracey
-    ```
-
-12. **Display summary**:
+11. **Display a summary**:
 
     ```
-    ## Project Initialized for Spec-Driven Delivery
+    ## Project initialized for spec-driven delivery
 
-    **OpenSpec**: Initialized with spec-driven-tracey schema
-    **Tracey**: Configured at .config/tracey/config.styx
+    **OpenSpec**: stock spec-driven schema
     **Tech stack**: {detected stack}
-    **Implementations tracked**: {list of language impl names}
+    **Verify commands**: {labels}
 
-    ### Created files
+    ### Created or updated
     - openspec/config.yaml
-    - openspec/schemas/spec-driven-tracey/ (schema + templates)
-    - .config/tracey/config.styx
-    - .config/tracey/README.md
+    - .config/spec-deliver/verify
+    - .claude/settings.json
+    - .gitignore
     - .github/workflows/spec-validation.yaml
 
-    ### Next steps
-    - Run `/spec-deliver:spec-deliver "your idea"` to start your first feature
-    - Or run `/opsx:explore "topic"` to investigate first
+    ### Before your first delivery
+    - Commit these files.
+    - Open this repo interactively once and accept the trust dialog. Allow rules are ignored in untrusted workspaces.
+    - Protect the default branch.
+
+    ### Next
+    Run `/spec-deliver:spec-deliver "your idea"`, or add `--quick` for a small fix.
     ```

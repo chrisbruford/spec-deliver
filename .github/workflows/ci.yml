@@ -26,5 +26,8 @@ jobs:
       - name: Skill regression checks
         run: bash tests/skill-lint.sh
 
+      - name: Workflow tests
+        run: node --test tests/*.test.mjs
+
       - name: Gate tests
         run: bash tests/gate.test.sh

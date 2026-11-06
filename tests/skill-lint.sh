@@ -23,4 +23,12 @@ check "archive output is committed" grep -qi 'commit the archive' "$S"
 check "reviewer subagent types are plugin-prefixed" grep -q '`spec-deliver:qa-code-reviewer`' "$P"
 check "every reviewer defines the shared severity scale" bash -c 'for f in agents/*-reviewer.md; do grep -q "^## Severity Scale" "$f" || exit 1; done'
 
+# No retired dependency may survive outside the migration notes.
+# init must still name the old schema, so that it can leave the directory in place.
+check "no references to retired tools" bash -c '! grep -rnIiE "ralph|tracey|opsx:verify|agent team" . --exclude-dir=.git --exclude-dir=node_modules --exclude=MIGRATION.md --exclude=skill-lint.sh | grep -v "schemas/spec-driven-tracey"'
+check "the approval commit carries the trailer the gate needs" grep -q 'Spec-Approved: <change-name>' "$S"
+check "the skill ends its turn after starting the workflow" grep -q 'end your turn' "$S"
+check "the final gate runs in the main session" grep -q 'Do not delegate it' "$S"
+check "plugin manifest points at the new repo" grep -q 'chrisbruford/spec-deliver' .claude-plugin/plugin.json
+
 exit $fail

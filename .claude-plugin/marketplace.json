@@ -7,7 +7,7 @@
     {
       "name": "spec-deliver",
       "source": "./",
-      "description": "Spec-driven autonomous delivery: OpenSpec + Tracey traceability + Ralph loop"
+      "description": "Spec-driven delivery: short specs, human approval, test-first delivery checked by a deterministic gate"
     }
   ]
 }
