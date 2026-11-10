@@ -1,6 +1,6 @@
 ---
 description: "Multi-lens code review. Runs specialist reviewers in parallel (qa, adversarial, security, tests, plus concurrency, observability, contract and ops when the diff warrants them), checks every finding against the code, then dedups and ranks."
-argument-hint: "[base] [--change <name>] [--all-lenses] [--ponytail]"
+argument-hint: "[base] [--change <name>] [--all-lenses]"
 ---
 
 # Parallel Review
@@ -9,12 +9,12 @@ Review pending changes with specialist lenses. The value is in the verification 
 
 ## Inputs
 
-`/spec-deliver:parallel-review [base] [--change <name>] [--all-lenses] [--ponytail]`
+`/spec-deliver:parallel-review [base] [--change <name>] [--all-lenses]`
 
 - `base` defaults to `main`. Prefer `origin/main` when local main may be stale.
 - `--change <name>` writes the report into that OpenSpec change.
-- `--all-lenses` runs all 8 lenses without selection. The selector already includes a lens when it is unsure, so use this only when you want every lens whatever the diff.
-- `--ponytail` adds the `ponytail:ponytail-review` skill as a lens. It overlaps the qa lens, so it is off by default.
+- `--all-lenses` runs every lens without selection. The selector already includes a lens when it is unsure, so use this only when you want every lens whatever the diff.
+- If the `ponytail:ponytail-review` skill is installed, the selector can add it as a lens when the diff adds code that may be simpler.
 
 ## Steps
 
@@ -39,7 +39,7 @@ Call the Workflow tool with name `spec-deliver:review` and these `args`:
 
 - `base`, `branch`, `files` (as an array), and `stats` (the diff summary line).
 - `allLenses: true` if `--all-lenses` was passed.
-- `ponytail: true` if `--ponytail` was passed and the `ponytail:ponytail-review` skill is in your available skills list. Otherwise omit it.
+- `ponytail: true` if the `ponytail:ponytail-review` skill is in your available skills list. Otherwise omit it. The selector decides whether it runs.
 
 Tell the user the review has started, then **end your turn**. The completion notification restarts you here.
 

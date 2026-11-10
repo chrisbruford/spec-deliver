@@ -76,11 +76,24 @@ test('reviewers are told allow rules match single commands', async () => {
   assert.match(calls.find(c => c.label === 'lens tests').prompt, /one command per Bash call/i)
 })
 
-test('ponytail runs only when asked', async () => {
+test('ponytail is offered to the selector only when the skill is available', async () => {
   const off = await run(base, world())
-  assert.equal(lensesRun(off.calls).includes('ponytail'), false)
+  assert.doesNotMatch(off.calls.find(c => c.label === 'select lenses').prompt, /ponytail/)
   const on = await run({ ...base, ponytail: true }, world())
-  assert.equal(lensesRun(on.calls).includes('ponytail'), true)
+  assert.match(on.calls.find(c => c.label === 'select lenses').prompt, /- ponytail:/)
+})
+
+test('ponytail runs when the selector chooses it, and is reported as skipped when not', async () => {
+  const chosen = await run({ ...base, ponytail: true }, world({ select: () => ({ lenses: ['ponytail'], skipped: [] }) }))
+  assert.equal(lensesRun(chosen.calls).includes('ponytail'), true)
+  const notChosen = await run({ ...base, ponytail: true }, world({ select: () => ({ lenses: [], skipped: [{ lens: 'ponytail', reason: 'small fix' }] }) }))
+  assert.equal(lensesRun(notChosen.calls).includes('ponytail'), false)
+  assert.deepEqual(notChosen.result.lensesSkipped.find(s => s.lens === 'ponytail'), { lens: 'ponytail', reason: 'small fix' })
+})
+
+test('ponytail never runs when the skill is unavailable, even if the selector names it', async () => {
+  const { calls } = await run(base, world({ select: () => ({ lenses: ['ponytail'], skipped: [] }) }))
+  assert.equal(lensesRun(calls).includes('ponytail'), false)
 })
 
 test('a failed lens is flagged, not dropped silently', async () => {

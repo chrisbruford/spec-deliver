@@ -10,7 +10,7 @@
 | Lock files in test projects counted as test edits | Generated lock files never count as tests |
 | Any `Green-For` trailer marked a group green | `status` and `final` check that `task` wrote it |
 | `--high-risk` meant sign-off per group and every review lens | `--signoff` asks for sign-off per group. Lens selection runs for every tier |
-| The ponytail lens ran whenever the plugin was installed | `--ponytail` turns it on |
+| The ponytail lens ran whenever the plugin was installed | The selector adds it when the diff warrants it |
 | `init` wrote permissions to `.claude/settings.json` | `.claude/settings.local.json`, which is personal. Move the spec-deliver rules out of the shared file |
 | Tooling had to be committed | `init` offers local mode |
 

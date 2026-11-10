@@ -23,6 +23,8 @@ const NEARBY_LINES = 3
 
 const input = args || {}
 const files = input.files
+// The caller passes ponytail only when the ponytail:ponytail-review skill is installed.
+if (input.ponytail) OPTIONAL_LENSES.ponytail = 'new code, abstractions, options or dependencies where a simpler version may exist'
 
 if (!SAFE_REF.test(input.base || '') || !Array.isArray(files) || files.length === 0) {
   return { status: 'refused', reason: 'needs a valid base and a list of changed files. Start through /spec-deliver:parallel-review.' }
@@ -147,10 +149,9 @@ const runLens = lens => {
 }
 
 phase('Review')
-const allLenses = input.ponytail ? [...lenses, 'ponytail'] : lenses
-const reports = await parallel(allLenses.map(lens => () => runLens(lens)))
+const reports = await parallel(lenses.map(lens => () => runLens(lens)))
 
-const failedLenses = allLenses.filter((_, index) => !reports[index])
+const failedLenses = lenses.filter((_, index) => !reports[index])
 const raw = []
 const reviewed = new Set()
 const positives = new Set()
@@ -158,7 +159,7 @@ let testSuite = null
 
 reports.forEach((report, index) => {
   if (!report) return
-  const lens = allLenses[index]
+  const lens = lenses[index]
   report.findings.forEach(finding => raw.push({ ...finding, lenses: [lens], verified: false }))
   report.filesReviewed.forEach(file => reviewed.add(file))
   report.positives.forEach(positive => positives.add(positive))
@@ -270,7 +271,7 @@ return {
   refuted,
   unverifiedOverCap: overCap.length,
   testSuite,
-  lensesRun: allLenses.filter(lens => !failedLenses.includes(lens)),
+  lensesRun: lenses.filter(lens => !failedLenses.includes(lens)),
   lensesSkipped,
   failedLenses,
   uncoveredFiles: files.filter(file => !reviewed.has(file)),

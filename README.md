@@ -91,7 +91,7 @@ It checks that new tests fail first, that tests, specs, CI and test runner confi
 
 Findings go to at most 6 verifiers, with findings from one file kept together.
 
-If you have the [ponytail](https://github.com/DietrichGebert/ponytail) plugin, `--ponytail` adds it as an extra lens. Its SubagentStart hook injects its rules into every sub-agent, which can work against the reviewers' exhaustiveness mandate. To keep them out, add this to the `env` block of `~/.claude/settings.json`:
+If you have the [ponytail](https://github.com/DietrichGebert/ponytail) plugin, the selector can add it as a lens when the diff adds code that may be simpler. Its SubagentStart hook injects its rules into every sub-agent, which can work against the reviewers' exhaustiveness mandate. To keep them out, add this to the `env` block of `~/.claude/settings.json`:
 
 ```json
 "PONYTAIL_SUBAGENT_MATCHER": "^(?!(spec-deliver:)?(qa-code|adversarial|security|concurrency|observability|contract|ops|tests)-reviewer$)"
