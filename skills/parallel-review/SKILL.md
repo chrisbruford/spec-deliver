@@ -13,7 +13,8 @@ Review pending changes with specialist lenses. The value is in the verification 
 
 - `base` defaults to `main`. Prefer `origin/main` when local main may be stale.
 - `--change <name>` writes the report into that OpenSpec change.
-- `--all-lenses` runs all 8 lenses without selection. Use it for high-risk changes.
+- `--all-lenses` runs every lens without selection. The selector already includes a lens when it is unsure, so use this only when you want every lens whatever the diff.
+- If the `ponytail:ponytail-review` skill is installed, the selector can add it as a lens when the diff adds code that may be simpler.
 
 ## Steps
 
@@ -38,13 +39,13 @@ Call the Workflow tool with name `spec-deliver:review` and these `args`:
 
 - `base`, `branch`, `files` (as an array), and `stats` (the diff summary line).
 - `allLenses: true` if `--all-lenses` was passed.
-- `ponytail: true` if the `ponytail:ponytail-review` skill is in your available skills list. Otherwise omit it, and do not suggest installing it.
+- `ponytail: true` if the `ponytail:ponytail-review` skill is in your available skills list. Otherwise omit it. The selector decides whether it runs.
 
 Tell the user the review has started, then **end your turn**. The completion notification restarts you here.
 
 ### 4. Write the report
 
-If the result's status is `refused`, report the reason and stop. Otherwise write the report to `openspec/changes/<change>/review.md` when `--change` was given, or to `.config/spec-deliver/review-<branch>.local.md` when it was not, replacing `/` with `-` in the branch name so the file stays git-ignored.
+If the result's status is `refused`, report the reason and stop. If you read the result from the output file, its `.result` field is a JSON string, so parse it with `jq '.result | fromjson'`. Otherwise write the report to `openspec/changes/<change>/review.md` when `--change` was given, or to `.config/spec-deliver/review-<branch>.local.md` when it was not, replacing `/` with `-` in the branch name so the file stays git-ignored.
 
 ```markdown
 # Review: {branch} → {base}

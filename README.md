@@ -42,7 +42,9 @@ The setup script sets npm's global prefix to `~/.npm-global` and adds it to your
 /spec-deliver:init
 ```
 
-This creates `openspec/`, the verify file that defines done, the permissions delivery needs, and a CI check. Commit the result, and open the repo interactively once to accept the trust dialog, because allow rules are ignored in untrusted workspaces.
+This creates `openspec/`, the verify file that defines done, the permissions delivery needs in your personal `.claude/settings.local.json`, and a CI check. Commit the result, and open the repo interactively once to accept the trust dialog, because allow rules are ignored in untrusted workspaces.
+
+If your team does not want spec-deliver files in the repo, choose local mode. Init excludes the tooling in `.git/info/exclude`, and each PR is opened from a clean branch that holds only the delivered change.
 
 To enable the plugin for all contributors, add this to the repo's `.claude/settings.json`:
 
@@ -60,7 +62,8 @@ To enable the plugin for all contributors, add this to the repo's `.claude/setti
 | --- | --- |
 | `/spec-deliver:spec-deliver "add JWT auth"` | A feature, from idea to PR |
 | `/spec-deliver:spec-deliver "fix rounding bug" --quick` | A bug fix or small change: acceptance tests, no spec documents |
-| `/spec-deliver:spec-deliver "move card vault" --high-risk` | Auth, payments, migrations: full design and sign-off per group |
+| `/spec-deliver:spec-deliver "move card vault" --high-risk` | Auth, payments, migrations: full design |
+| `/spec-deliver:spec-deliver "move card vault" --signoff` | Sign off each group before the next one starts |
 | `/spec-deliver:spec-deliver add-jwt-auth --skip-explore` | Skip straight to the spec |
 | `/spec-deliver:parallel-review [base]` | Review any branch, standalone |
 | `/spec-deliver:help` | Show help |
@@ -86,7 +89,9 @@ It checks that new tests fail first, that tests, specs, CI and test runner confi
 
 `parallel-review` always runs the qa, adversarial, security and tests lenses. It adds concurrency, observability, contract and ops when the diff warrants them, and reports what it skipped and why. Each Critical, High and Medium finding then goes to a verifier that tries to refute it against the code.
 
-If you have the [ponytail](https://github.com/DietrichGebert/ponytail) plugin, it joins as an extra lens. Its SubagentStart hook injects its rules into every sub-agent, which can work against the reviewers' exhaustiveness mandate. To keep them out, add this to the `env` block of `~/.claude/settings.json`:
+Findings go to at most 6 verifiers, with findings from one file kept together.
+
+If you have the [ponytail](https://github.com/DietrichGebert/ponytail) plugin, the selector can add it as a lens when the diff adds code that may be simpler. Its SubagentStart hook injects its rules into every sub-agent, which can work against the reviewers' exhaustiveness mandate. To keep them out, add this to the `env` block of `~/.claude/settings.json`:
 
 ```json
 "PONYTAIL_SUBAGENT_MATCHER": "^(?!(spec-deliver:)?(qa-code|adversarial|security|concurrency|observability|contract|ops|tests)-reviewer$)"

@@ -1,6 +1,6 @@
 {
   "name": "spec-deliver",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Spec-driven delivery: short OpenSpec specs, human approval, test-first delivery checked by a deterministic gate, specialist review, and a PR with an evidence pack.",
   "author": {
     "name": "Chris Bruford"

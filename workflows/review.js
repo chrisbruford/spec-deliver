@@ -23,6 +23,8 @@ const NEARBY_LINES = 3
 
 const input = args || {}
 const files = input.files
+// The caller passes ponytail only when the ponytail:ponytail-review skill is installed.
+if (input.ponytail) OPTIONAL_LENSES.ponytail = 'new code, abstractions, options or dependencies where a simpler version may exist'
 
 if (!SAFE_REF.test(input.base || '') || !Array.isArray(files) || files.length === 0) {
   return { status: 'refused', reason: 'needs a valid base and a list of changed files. Start through /spec-deliver:parallel-review.' }
@@ -30,6 +32,7 @@ if (!SAFE_REF.test(input.base || '') || !Array.isArray(files) || files.length ==
 
 const { base, branch, stats = '' } = input
 const maxVerify = input.maxVerify ?? 40
+const maxVerifiers = input.maxVerifiers ?? 6
 
 const SELECT_SCHEMA = {
   type: 'object',
@@ -146,10 +149,9 @@ const runLens = lens => {
 }
 
 phase('Review')
-const allLenses = input.ponytail ? [...lenses, 'ponytail'] : lenses
-const reports = await parallel(allLenses.map(lens => () => runLens(lens)))
+const reports = await parallel(lenses.map(lens => () => runLens(lens)))
 
-const failedLenses = allLenses.filter((_, index) => !reports[index])
+const failedLenses = lenses.filter((_, index) => !reports[index])
 const raw = []
 const reviewed = new Set()
 const positives = new Set()
@@ -157,7 +159,7 @@ let testSuite = null
 
 reports.forEach((report, index) => {
   if (!report) return
-  const lens = allLenses[index]
+  const lens = lenses[index]
   report.findings.forEach(finding => raw.push({ ...finding, lenses: [lens], verified: false }))
   report.filesReviewed.forEach(file => reviewed.add(file))
   report.positives.forEach(positive => positives.add(positive))
@@ -183,8 +185,25 @@ function cluster(findings) {
   return clusters.sort((a, b) => Math.min(...a.map(rank)) - Math.min(...b.map(rank)))
 }
 
+// A verifier is a cold start, so clusters share a few verifiers. Clusters from one file stay together.
+function batch(clusters) {
+  const batches = []
+  for (const findings of clusters) {
+    const file = findings[0].file
+    let target = batches.find(entry => entry.files.has(file))
+    if (!target && batches.length < maxVerifiers) {
+      target = { files: new Set(), findings: [] }
+      batches.push(target)
+    }
+    if (!target) target = batches.reduce((a, b) => (b.findings.length < a.findings.length ? b : a))
+    target.files.add(file)
+    target.findings.push(...findings)
+  }
+  return batches.map(entry => entry.findings)
+}
+
 const clusters = cluster(raw.filter(needsVerifying))
-const toVerify = clusters.slice(0, maxVerify)
+const toVerify = batch(clusters.slice(0, maxVerify))
 const overCap = clusters.slice(maxVerify).flat()
 if (overCap.length > 0) log(`${overCap.length} findings were over the verify cap of ${maxVerify} and stay unverified`)
 
@@ -252,7 +271,7 @@ return {
   refuted,
   unverifiedOverCap: overCap.length,
   testSuite,
-  lensesRun: allLenses.filter(lens => !failedLenses.includes(lens)),
+  lensesRun: lenses.filter(lens => !failedLenses.includes(lens)),
   lensesSkipped,
   failedLenses,
   uncoveredFiles: files.filter(file => !reviewed.has(file)),

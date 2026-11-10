@@ -1,4 +1,22 @@
-# Migrating to 4.0
+# Migrating to 4.1
+
+4.1 changes the gate and the delivery workflow after the first field runs. In-flight deliveries resume without changes.
+
+| Before | After |
+| --- | --- |
+| `gate task`, then the group review, then `gate accept` | The group review, then `gate task`, which ticks the group and commits `Green-For`. Auto mode blocked `accept` as self-approval |
+| A wrong test after red needed a history rewrite | `Test-Fix-For` commit plus `gate test-fix`, forward only, after a human agrees |
+| Editing a protected path meant replacing all of `protect:` | `allow: <regex>` exempts only those paths |
+| Lock files in test projects counted as test edits | Generated lock files never count as tests |
+| Any `Green-For` trailer marked a group green | `status` and `final` check that `task` wrote it |
+| `--high-risk` meant sign-off per group and every review lens | `--signoff` asks for sign-off per group. Lens selection runs for every tier |
+| The ponytail lens ran whenever the plugin was installed | The selector adds it when the diff warrants it |
+| `init` wrote permissions to `.claude/settings.json` | `.claude/settings.local.json`, which is personal. Move the spec-deliver rules out of the shared file |
+| Tooling had to be committed | `init` offers local mode |
+
+Scripts that called `spec-deliver-gate accept` should call `task` with `--change`, and pass the no-test reason to `task --no-test <reason>`.
+
+## Migrating to 4.0
 
 4.0 removes the Ralph loop and Tracey, and replaces the forked OpenSpec schema with the stock one.
 

@@ -9,25 +9,27 @@
     ├─ 1 EXPLORE: /opsx:explore, interactive
     ├─ 2 PROPOSE: /opsx:propose writes proposal, spec, design, tasks
     ├─ 3 APPROVE ← HUMAN GATE
+    │   ├─ gate preflight: protected paths in the plan, verify commands pass
     │   └─ commit with a Spec-Approved trailer freezes specs and verify commands
     │
     ├─ 4 DELIVER: workflow spec-deliver:deliver, per task group
     │   ├─ test-writer commits failing tests     (Red-For: <group>)
     │   ├─ gate red: tests must fail
     │   ├─ implementer, fresh context
-    │   ├─ gate task: verify commands pass, tests and protected paths untouched
-    │   │   └─ up to 2 forward-only retries, then stop and report
     │   ├─ reviewer reads the diff and the red log
-    │   └─ gate accept: ticks tasks.md, commits  (Green-For: <group>)
+    │   └─ gate task: verify commands pass, tests and protected paths untouched,
+    │       then ticks tasks.md and commits       (Green-For: <group>)
+    │       └─ up to 2 forward-only retries, then stop and report
     │
     ├─ 5 QA: workflow spec-deliver:review
-    │   └─ lenses chosen by diff, verify each finding, dedup, rank, report file
+    │   ├─ lenses chosen by diff, verify each finding, dedup, rank, report file
+    │   └─ testable fixes go back through deliver as qa<n> groups
     ├─ 6 VERIFY: gate final from the main session, then the evidence pack
     ├─ 7 ARCHIVE: /opsx:archive, commit
     └─ 8 PR: evidence pack in the body ← HUMAN GATE
 ```
 
-`--quick` skips Explore, Propose and Archive. `--high-risk` runs one workflow per group, with human sign-off between groups.
+`--quick` skips Explore, Propose and Archive. `--signoff` runs one workflow per group, with human sign-off between groups.
 
 ## The Gate
 
@@ -35,11 +37,13 @@
 
 | Mode | Checks |
 | --- | --- |
+| `version` | Prints the plugin version |
+| `preflight` | Before approval: names the given paths that are protected, and runs the working-tree verify commands |
 | `baseline` | Clean tree, verify commands pass |
-| `status` | Reports `none`, `red-unchecked`, `red` or `green` for a group |
+| `status` | Reports `none`, `red-unchecked`, `red` or `green` for a group. Fails on a `Green-For` that `task` did not write |
 | `red` | HEAD is the group's `Red-For` commit, it touches a test file, and the test command fails |
-| `task` | Clean tree, protected paths intact, no test edits since red, a tracked code change since red, verify commands pass |
-| `accept` | `task` passed at this exact HEAD; ticks the group and commits `Green-For` |
+| `test-fix` | HEAD is a `Test-Fix-For` commit that touches only tests, made after a checked red and before green |
+| `task` | Clean tree, HEAD is the reviewed commit (`--head`), protected paths intact, no test edits since red or the last test fix, a tracked code change since red, verify commands pass. Then ticks the group and commits `Green-For` |
 | `final` | All of the above across every group, every approved group delivered, group tests still present, every task ticked, verify commands pass |
 
 The last line of output is always `GATE <mode> <PASS|FAIL|ERROR> ...`. Exit codes are 0 pass, 1 fail, 2 usage or configuration error.
@@ -61,14 +65,17 @@ lint: npm run lint
 build: npm run build
 ```
 
-Every `label: command` line runs, and any other line that is not a comment is an error. `test` is the command `gate red` expects to fail. Two keys are reserved:
+Every `label: command` line runs, and any other line that is not a comment is an error. `test` is the command `gate red` expects to fail. Three keys are reserved:
 
 | Key | Purpose |
 | --- | --- |
 | `test-files: <regex>` | Replaces the default pattern for what counts as a test file |
 | `protect: <regex>` | Replaces the default protected paths |
+| `allow: <regex>` | Exempts matching paths from protection, and keeps the rest |
 
-The defaults protect the verify file, CI workflows, Claude settings, stable specs, the change's spec, proposal and design, and common test runner config. If a change must edit a protected path, set `protect:` before approval. `protect:` replaces the defaults, so keep the ones you still want.
+The defaults protect the verify file, CI workflows, Claude settings, stable specs, the change's spec, proposal and design, and common test runner config. If a change must edit a protected path, add an `allow:` line before approval. `gate preflight` lists the protected paths a plan touches.
+
+Generated lock files, such as `packages.lock.json` or `pnpm-lock.yaml`, never count as test files, even inside a test project.
 
 The gate runs verify commands from the approved commit, but not the scripts they call. If a verify command runs a repo script, add that script to `protect:`, along with any manifest that defines the command, such as `package.json`.
 
@@ -78,8 +85,11 @@ The gate runs verify commands from the approved commit, but not the scripts they
 | --- | --- | --- |
 | `Spec-Approved: <change>` | The skill, after human approval | The commit that freezes the rules |
 | `Red-For: <group>` | The test writer | Failing tests for a group |
-| `Green-For: <group>` | `gate accept` | The group passed |
-| `No-Test: <reason>` | `gate accept` | The group had no tests of its own |
+| `Test-Fix-For: <group>` | The main session, after a human agrees a test is wrong | A test-only fix after red |
+| `Green-For: <group>` | `gate task` | The group passed |
+| `No-Test: <reason>` | `gate task` | The group had no tests of its own |
+
+Write trailers with `git commit --trailer`, so they share one block with any other trailers.
 
 ## Group Kinds
 
@@ -87,7 +97,7 @@ Set in the `tasks.md` heading, for example `## 3. Update docs (no-test)`.
 
 | Kind | Red step | Test edits |
 | --- | --- | --- |
-| `code` (default) | Yes | Only in the test writer's commit |
+| `code` (default) | Yes | Only in the test writer's commit, or a `Test-Fix-For` commit |
 | `no-test` | No | Not checked; verify commands still run. `gate final` rejects this kind unless the approved heading says so |
 | `refactor` | No | None allowed, so behaviour is pinned by existing tests |
 
@@ -107,6 +117,9 @@ change: add-user-auth
 branch: spec/add-user-auth
 phase: delivering       # exploring | proposing | reviewing | delivering | qa | verifying | archiving
 tier: standard          # quick | standard | high-risk
+signoff: false
+source: plans/auth.md   # the plan file the idea came from, if any
+source_sha: 9f2c…       # git hash-object of that file, checked again before approval
 approved_sha: 1a2b3c4
 started: 2026-11-06
 updated: 2026-11-06

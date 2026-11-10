@@ -61,4 +61,16 @@ check "a denied command is not read as Bash being unavailable" grep -qi 'one den
 check "init ignores local state" grep -q '.config/spec-deliver/\*.local.\*' "$I"
 check "creating a PR asks a human" grep -q 'Bash(gh pr create:\*)' "$C"
 
+# Found in the first field runs (ems, infrastructure).
+check "approval trailers use --trailer, so attribution cannot split them off" grep -q -- '--trailer "Spec-Approved: <change-name>"' "$S"
+check "a wrong test is fixed forward, not by rewriting history" grep -q 'spec-deliver-gate test-fix' "$S"
+check "the plan is checked against the gate before approval" grep -q 'spec-deliver-gate preflight' "$S"
+check "the source plan is checked for drift before approval" grep -q 'git hash-object' "$S"
+check "spec-deliver does not force every lens" absent '--all-lenses' "$S"
+check "nothing calls the removed accept mode" bash -c "! grep -rnE \"spec-deliver-gate accept|gate\\('accept'\" skills workflows README.md"
+check "init writes permissions to personal settings" grep -q '.claude/settings.local.json' "$I"
+check "init offers to keep tooling out of the repo" grep -q '.git/info/exclude' "$I"
+check "init states the single-command rule" grep -q 'one command per Bash call' "$I"
+check "settings do not allow git rm" absent 'git rm' "$C"
+
 exit $fail
