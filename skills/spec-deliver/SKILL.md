@@ -1,6 +1,6 @@
 ---
 description: "Take a change from idea to pull request: short spec, human approval, test-first delivery checked by a deterministic gate, specialist review, and an evidence pack. Use when the user wants to build a feature or fix through to a PR. Detects when a project has .config/spec-deliver/verify."
-argument-hint: "<idea or change-name> [--quick] [--high-risk] [--skip-explore] [--max-output-tokens N]"
+argument-hint: "<idea or change-name> [--quick] [--high-risk] [--signoff] [--skip-explore] [--max-output-tokens N]"
 ---
 
 # Spec Deliver
@@ -11,7 +11,7 @@ See the [workflow reference](references/workflow.md) for the flow, the gate and 
 
 ## Running commands
 
-Run one command per Bash call, with no `;`, `&&` or pipes, because allow rules match single commands. Use Read and Glob rather than `cat`, `ls` or `test`. One denied command does not mean Bash is unavailable: rewrite it as a single command, or use another tool, before deciding you are blocked.
+Run one command per Bash call, with no `;`, `&&` or pipes, because allow rules match single commands. Use Read and Glob rather than `cat`, `ls` or `test`, or `find` when Glob is not available. One denied command does not mean Bash is unavailable: rewrite it as a single command, or use another tool, before deciding you are blocked.
 
 ## Tiers
 
@@ -19,9 +19,13 @@ Run one command per Bash call, with no `;`, `&&` or pipes, because allow rules m
 | --- | --- | --- | --- |
 | `--quick` | Bug fixes and small changes | Acceptance criteria only, no OpenSpec artifacts | Approve the criteria, review the PR |
 | Standard (default) | Features | Proposal, short spec, stub design, tasks | Approve the spec, review the PR |
-| `--high-risk` | Auth, payments, data migrations | Proposal, spec, full design, tasks | Approve the spec, sign off each group, review the PR |
+| `--high-risk` | Auth, payments, data migrations | Proposal, spec, full design, tasks | Approve the spec, review the PR |
 
 If the request touches auth, payments, personal data or migrations and `--high-risk` was not passed, ask the user whether to use it.
+
+`--signoff` works with any tier: the user signs off each group before the next one starts.
+
+**Local mode**: if `git check-ignore -q .config/spec-deliver/verify` succeeds, the repo keeps spec-deliver and OpenSpec files out of git. The branch still commits them, because the gate reads them from commits, so stage them with `git add -f`. Phase 8 then opens the PR from a clean branch.
 
 ## Phases
 
@@ -38,12 +42,12 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 
 ### Phase 0: Parse, check and resume
 
-1. **Parse arguments** from `$ARGUMENTS`. Extract and remove `--quick`, `--high-risk`, `--skip-explore` and `--max-output-tokens <n>`. `--quick` and `--high-risk` cannot be combined. The remaining text is a change name (kebab-case, no spaces) or a free-text idea.
+1. **Parse arguments** from `$ARGUMENTS`. Extract and remove `--quick`, `--high-risk`, `--signoff`, `--skip-explore` and `--max-output-tokens <n>`. `--quick` and `--high-risk` cannot be combined. The remaining text is a change name (kebab-case, no spaces) or a free-text idea.
 
 2. **Check prerequisites**:
 
    - The Workflow tool must be available. If it is not, stop and say: "spec-deliver needs dynamic workflows. Enable Dynamic workflows in `/config`, or ask your admin if `disableWorkflows` is set."
-   - Run `spec-deliver-gate` with no arguments. It prints a `GATE none ERROR` line, which proves it is installed. If the command is not found, stop and say the plugin is not enabled in this session.
+   - Run `spec-deliver-gate version`. It prints a `GATE version PASS` line. If the command is not found, stop and say the plugin is not enabled in this session.
    - `.config/spec-deliver/verify` must exist. If it does not, stop and tell the user to run `/spec-deliver:init`.
 
 3. **Check for a state file** at `.config/spec-deliver/state.local.md`, using Glob.
@@ -76,7 +80,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 
    If the phase is `delivering` or later, check the approval with `git merge-base --is-ancestor <approved_sha> HEAD`. If `approved_sha` is empty or not an ancestor of HEAD, tell the user and go back to Phase 3. A state file from 3.x has no approval, and the workflow refuses to run without one.
 
-6. **Show a resume summary** with the change, phase, tier and task progress, then jump to that phase.
+6. **Show a resume summary** with the change, phase, tier and task progress, then jump to that phase. If the phase is `reviewing`, check the source as in step 13 first.
 
 ### Phase 1: Explore
 
@@ -102,6 +106,9 @@ If the request touches auth, payments, personal data or migrations and `--high-r
    branch: <current branch>
    phase: exploring
    tier: <quick|standard|high-risk>
+   signoff: <true|false>
+   source: <path of the plan file the idea came from, or empty>
+   source_sha: <git hash-object of that file, or empty>
    approved_sha:
    started: <today YYYY-MM-DD>
    updated: <today YYYY-MM-DD>
@@ -110,7 +117,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
    <original idea text>
    ```
 
-   Update `phase` and `updated` at the start of each later phase.
+   Update `phase` and `updated` at the start of each later phase. If the idea came from a file, get `source_sha` with `git hash-object <path>`.
 
 10. **Explore**. Steps 7 to 9 always run: with `--quick` or `--skip-explore`, skip only step 10.
 
@@ -141,28 +148,39 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 
     Check that `tasks.md` uses numbered `## <n>. <title>` group headings. Mark a group `(no-test)` or `(refactor)` in its heading where that applies, for example `## 3. Update docs (no-test)`. Each group is delivered by fresh agents, so it must make sense on its own.
 
+12a. **Check the plan against the gate** before approval, because the rules freeze at approval. Run `spec-deliver-gate preflight` with every repo path that `tasks.md` and `design.md` say will change:
+
+    ```bash
+    spec-deliver-gate preflight <path> <path>
+    ```
+
+    - Each `protected: <path>` line is a path the plan changes that the gate protects. Delivery stops at that group. Ask the user whether to add an `allow:` line to the verify file that matches exactly those paths, for example `allow: ^\.github/workflows/deploy\.yml$`, or to change the plan.
+    - If the verify commands fail, delivery stops at the baseline. Fix the cause now. In an empty repo, write the smallest scaffold that makes each verify command pass, and add it to the approval commit.
+
 ### Phase 3: Approve
 
-13. **Present for review**. Show the change name, tier, files to read (or the acceptance criteria for `--quick`), task groups, and the commands in `.config/spec-deliver/verify`. Those commands define done, and they are frozen at approval.
+13. **Present for review**. If the state file has a `source_sha`, run `git hash-object <source>` first. If it changed, read the source again, tell the user what changed and how it affects the spec, and update the spec before you ask.
+
+    Show the change name, tier, files to read (or the acceptance criteria for `--quick`), task groups, and the commands in `.config/spec-deliver/verify`. Those commands define done, and they are frozen at approval.
 
 14. **Wait for approval**. Use AskUserQuestion: "Review the spec. Say **approved** to start delivery, or describe what to change." This is the main quality gate, so never skip it or infer approval.
 
     If the user requests changes, make them and ask again. If they cancel, delete the state file and stop.
 
-15. **Record the approval** in a commit. The gate refuses any commit without this trailer.
+15. **Record the approval** in a commit. The gate refuses any commit without this trailer. Use `--trailer`, so that other trailers join the same block. Add any scaffold files from step 12a, and use `git add -f` in local mode.
 
     Standard and high-risk:
 
     ```bash
     git add openspec/changes/<change-name> .config/spec-deliver/verify
-    git commit -m "spec: approve <change-name>" -m "Spec-Approved: <change-name>"
+    git commit -m "spec: approve <change-name>" --trailer "Spec-Approved: <change-name>"
     ```
 
     Quick, keeping the criteria in the commit body:
 
     ```bash
     git add .config/spec-deliver/verify
-    git commit --allow-empty -m "spec: approve <change-name>" -m "<acceptance criteria>" -m "Spec-Approved: <change-name>"
+    git commit --allow-empty -m "spec: approve <change-name>" -m "<acceptance criteria>" --trailer "Spec-Approved: <change-name>"
     ```
 
     Save `git rev-parse --short HEAD` as `approved_sha` in the state file. If `git status --porcelain` still shows other changes, stop and ask the user to commit or stash them, because the gate needs a clean tree.
@@ -177,29 +195,42 @@ If the request touches auth, payments, personal data or migrations and `--high-r
     - `constraints`: anything the proposal or design says must not change, plus resolved decisions.
     - `maxOutputTokens`: the `--max-output-tokens` value, if given.
 
-17. **Start delivery**. Call the Workflow tool with name `spec-deliver:deliver` and those `args`. For `--high-risk`, pass one group per run.
+17. **Start delivery**. Call the Workflow tool with name `spec-deliver:deliver` and those `args`. For `--signoff`, pass one group per run.
 
     Tell the user delivery has started and that `/workflows` shows progress. Then **end your turn**. The workflow runs in the background and its completion notification restarts you here.
 
 18. **When the workflow finishes**, read its result:
 
-    - `complete`: continue. For `--high-risk`, sign-off covers every group, including the last: show what the group changed and ask with AskUserQuestion, then repeat step 17 if groups remain.
-    - `stopped`: report `reason`, `group` and `detail`, and ask the user how to proceed. Do not work around a stop. Rerunning resumes from commits.
+    - `complete`: continue. For `--signoff`, sign-off covers every group, including the last: show what the group changed and ask with AskUserQuestion, then repeat step 17 if groups remain.
+    - `stopped` with reason `test-defect`: the implementer says a test is wrong, and `detail` proposes a fix. Read the test and check the claim, then ask the user. If they agree, make only that test change, commit it and record it, then repeat step 17:
+
+      ```bash
+      git commit -m "test: <summary>" --trailer "Test-Fix-For: <group>"
+      ```
+
+      ```bash
+      spec-deliver-gate test-fix --approved <approved_sha> --group <group>
+      ```
+
+      Never rewrite history to change a test.
+    - `stopped` for any other reason: report `reason`, `group` and `detail`, and ask the user how to proceed. Do not work around a stop. Rerunning resumes from commits. If the detail says the auto mode classifier denied a gate command, tell the user that `/auto-mode-setup` can describe `spec-deliver-gate` as this repo's local test gate.
     - `refused`: report the reason and stop.
 
     Carry the result's `notes` into Phase 5.
 
 ### Phase 5: QA
 
-19. **Run the review**. Invoke the Skill tool with skill `spec-deliver:parallel-review`, and args `<base> --change <change-name>` where base is the default branch. Prefer `origin/<default>`. Omit `--change` for `--quick`, and add `--all-lenses` for `--high-risk`. It starts a background workflow, so end your turn and continue when it reports.
+19. **Run the review**. Invoke the Skill tool with skill `spec-deliver:parallel-review`, and args `<base> --change <change-name>` where base is the default branch. Prefer `origin/<default>`. Omit `--change` for `--quick`. It starts a background workflow, so end your turn and continue when it reports.
 
     Success is **coverage, not zero findings**: every file has a verdict and any failed lens is flagged. Zero findings is empirically unreachable with stochastic reviewers (arXiv:2509.01494).
 
 20. **Triage**:
 
     - **Critical / High**: fix before continuing. If the engineer defers one, record that in the evidence pack.
-    - **Medium**: surface to the engineer. By default, fix now.
+    - **Medium**: surface to the engineer with your recommendation. Fix the ones they choose.
     - **Low / Info**: mention briefly. The engineer decides.
+
+    Deliver a fix that changes testable behaviour test-first: repeat step 17 with one group per fix, `{id: "qa1", title: "<finding title>", kind: "code", qa: true, detail: "<file:line, scenario and suggestion>"}`, and the same `approvedSha` and `change`. Make other fixes, such as docs or config, in this session.
 
     After fixes, run the verify commands again. Rerun the review only if fixes were extensive.
 
@@ -229,7 +260,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
     <the final gate's last line, and the verify commands it ran>
 
     ## Red to green
-    <per group: tail of spec-deliver/<group>.red.log under `git rev-parse --absolute-git-dir`, showing why the tests failed first, or the no-test reason>
+    <per group: tail of spec-deliver/<group>.red.log under `git rev-parse --absolute-git-dir`, showing why the tests failed first, or the no-test reason. List each Test-Fix-For commit with the reason the test was wrong>
 
     ## Scenarios
     | Scenario | Test |
@@ -251,11 +282,29 @@ Skip this phase for `--quick`.
 
 25. **Archive the change**. Invoke the Skill tool with skill `opsx:archive` and args `<change-name>`. This syncs delta specs into `openspec/specs/` and moves the change to the archive.
 
-    Then commit the archive output (the synced `openspec/specs/` deltas and the moved change directory) with a descriptive message.
+    Then commit the archive output (the synced `openspec/specs/` deltas and the moved change directory) with a descriptive message. In local mode, stage it with `git add -f`.
 
 ### Phase 8: PR
 
 26. **Create the pull request**. Run `gh pr view` first: if a PR already exists for this branch, push and skip to the next step. Otherwise push the branch and run `gh pr create`. Build the body from the evidence pack: summary, gate result, scenario table, review verdict, deferred items and human action items. Link the archived change.
+
+    **Local mode**: open the PR from a separate branch that has no tooling files. If `<branch>-pr` exists, run `git switch <branch>-pr`. Otherwise:
+
+    ```bash
+    git switch -c <branch>-pr origin/<default>
+    ```
+
+    Then copy the delivered files across and commit them:
+
+    ```bash
+    git restore --source=<branch> --staged --worktree -- . ':(exclude)openspec' ':(exclude).config/spec-deliver' ':(exclude,glob).claude/skills/openspec-*/**' ':(exclude).claude/commands/opsx' ':(exclude).github/workflows/spec-validation.yaml'
+    ```
+
+    ```bash
+    git commit -m "<conventional commit summary of the change>"
+    ```
+
+    Push `<branch>-pr` and create the PR from it. Then run `git switch <branch>`, which brings the tooling files back. The gate ran on `<branch>`, so the evidence pack in the PR body is the record.
 
     Merging stays with a human. Say so in your summary.
 
@@ -275,3 +324,5 @@ Skip this phase for `--quick`.
     **Review**: <verdict>, <N> findings fixed, <K> deferred
     **Waiting on**: human PR review
     ```
+
+    Suggest a new session for follow-up work, because this one carries the whole delivery in its context.

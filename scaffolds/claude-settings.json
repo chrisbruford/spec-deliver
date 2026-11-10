@@ -12,7 +12,6 @@
       "Bash(git show:*)",
       "Bash(git rev-parse:*)",
       "Bash(git mv:*)",
-      "Bash(git rm:*)",
       "Bash(git switch:*)",
       "Bash(git branch:*)",
       "Bash(git symbolic-ref:*)",

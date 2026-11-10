@@ -129,11 +129,30 @@ test('nearby findings go to one verifier, which merges duplicates', async () => 
   assert.deepEqual(result.findings[0].lenses.sort(), ['qa', 'security'])
 })
 
-test('distant findings in one file are verified separately', async () => {
-  const { calls } = await run(base, world({
+test('distant findings in one file share a verifier but get their own verdicts', async () => {
+  const { result, calls } = await run(base, world({
     lens: { qa: () => report([finding({ line: 10 }), finding({ line: 200 })]) },
   }))
-  assert.equal(calls.filter(c => c.label.startsWith('verify')).length, 2)
+  assert.equal(calls.filter(c => c.label.startsWith('verify')).length, 1)
+  assert.equal(result.findings.length, 2)
+  assert.equal(result.findings.every(f => f.verified), true)
+})
+
+test('many findings share a capped number of verifiers', async () => {
+  const many = Array.from({ length: 35 }, (_, i) => finding({ severity: 'Medium', file: `f${i}.ts` }))
+  const { result, calls } = await run(base, world({ lens: { qa: () => report(many) } }))
+  assert.equal(calls.filter(c => c.label.startsWith('verify')).length, 6)
+  assert.equal(result.findings.length, 35)
+  assert.equal(result.findings.every(f => f.verified), true)
+})
+
+test('a verdict lands on the right finding inside a shared batch', async () => {
+  const { result, calls } = await run({ ...base, maxVerifiers: 1 }, world({
+    lens: { qa: () => report([finding({ file: 'a.ts', title: 'keep' }), finding({ file: 'b.ts', title: 'drop' })]) },
+    verify: call => ({ verdicts: [{ index: 0, real: !/\[0\][^\n]*drop/.test(call.prompt), reason: 'r', duplicateOf: null }, { index: 1, real: !/\[1\][^\n]*drop/.test(call.prompt), reason: 'r', duplicateOf: null }] }),
+  }))
+  assert.equal(calls.filter(c => c.label.startsWith('verify')).length, 1)
+  assert.deepEqual(result.findings.map(f => f.title), ['keep'])
 })
 
 test('low and info findings skip verification', async () => {

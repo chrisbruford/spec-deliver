@@ -30,6 +30,7 @@ if (!SAFE_REF.test(input.base || '') || !Array.isArray(files) || files.length ==
 
 const { base, branch, stats = '' } = input
 const maxVerify = input.maxVerify ?? 40
+const maxVerifiers = input.maxVerifiers ?? 6
 
 const SELECT_SCHEMA = {
   type: 'object',
@@ -183,8 +184,25 @@ function cluster(findings) {
   return clusters.sort((a, b) => Math.min(...a.map(rank)) - Math.min(...b.map(rank)))
 }
 
+// A verifier is a cold start, so clusters share a few verifiers. Clusters from one file stay together.
+function batch(clusters) {
+  const batches = []
+  for (const findings of clusters) {
+    const file = findings[0].file
+    let target = batches.find(entry => entry.files.has(file))
+    if (!target && batches.length < maxVerifiers) {
+      target = { files: new Set(), findings: [] }
+      batches.push(target)
+    }
+    if (!target) target = batches.reduce((a, b) => (b.findings.length < a.findings.length ? b : a))
+    target.files.add(file)
+    target.findings.push(...findings)
+  }
+  return batches.map(entry => entry.findings)
+}
+
 const clusters = cluster(raw.filter(needsVerifying))
-const toVerify = clusters.slice(0, maxVerify)
+const toVerify = batch(clusters.slice(0, maxVerify))
 const overCap = clusters.slice(maxVerify).flat()
 if (overCap.length > 0) log(`${overCap.length} findings were over the verify cap of ${maxVerify} and stay unverified`)
 

@@ -77,13 +77,12 @@ implement() {
   commit -m 'feat: mul'
 }
 
-# Drives group 1 through red, task and accept.
+# Drives group 1 through red and task.
 green_group() {
   red_commit
   "$GATE" red --approved "$APPROVED" --group 1 >/dev/null
   implement
-  "$GATE" task --approved "$APPROVED" --group 1 >/dev/null
-  "$GATE" accept --approved "$APPROVED" --group 1 --change c >/dev/null
+  "$GATE" task --approved "$APPROVED" --group 1 --change c >/dev/null
 }
 
 # --- input validation ---------------------------------------------------------
@@ -225,53 +224,49 @@ expect 1 'dirty-tree' 'task fails on uncommitted work' -- task --approved "$APPR
 
 node_repo notest
 echo docs > README.md; commit -m docs
-expect 0 'PASS' 'a no-test group skips red but runs verify commands' -- task --approved "$APPROVED" --group 2 --no-test
+expect 0 'PASS' 'a no-test group skips red but runs verify commands' -- task --approved "$APPROVED" --group 2 --no-test docs
 
 node_repo notest-fail
 echo 'exports.add = () => 0' > math.js; commit -m broke
-expect 1 'verify-failed' 'a no-test group still fails on broken verify commands' -- task --approved "$APPROVED" --group 2 --no-test
+expect 1 'verify-failed' 'a no-test group still fails on broken verify commands' -- task --approved "$APPROVED" --group 2 --no-test docs
 
 node_repo refactor
 START=$(git rev-parse HEAD)
 echo '// tidy' >> math.js; commit -m refactor
-expect 0 'PASS' 'a refactor group passes with tests untouched' -- task --approved "$APPROVED" --group 2 --no-test --since "$START"
+expect 0 'PASS' 'a refactor group passes with tests untouched' -- task --approved "$APPROVED" --group 2 --no-test refactor --since "$START"
 
 node_repo refactor-test-edit
 START=$(git rev-parse HEAD)
 echo '// edit' >> math.test.js; commit -m refactor
-expect 1 'test-edited' 'a refactor group fails if tests change' -- task --approved "$APPROVED" --group 2 --no-test --since "$START"
+expect 1 'test-edited' 'a refactor group fails if tests change' -- task --approved "$APPROVED" --group 2 --no-test refactor --since "$START"
 
-# --- accept ------------------------------------------------------------------
+# --- task acceptance ---------------------------------------------------------
 
 node_repo accept
 red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null; implement
-"$GATE" task --approved "$APPROVED" --group 1 >/dev/null
-expect 0 'PASS' 'accept passes after task' -- accept --approved "$APPROVED" --group 1 --change c
-[ "$(grep -c '^- \[x\]' openspec/changes/c/tasks.md)" = 2 ] && ok 'accept ticks every task in the group' || bad 'accept ticks every task in the group'
-grep -q '^- \[ \] 2.1' openspec/changes/c/tasks.md && ok 'accept leaves other groups alone' || bad 'accept leaves other groups alone'
-git log -1 --format=%B | grep -q '^Green-For: 1$' && ok 'accept commits a Green-For trailer' || bad 'accept commits a Green-For trailer'
-
-node_repo accept-stale
-red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null; implement
-"$GATE" task --approved "$APPROVED" --group 1 >/dev/null
-echo '// later' >> math.js; commit -m later
-expect 1 'task-not-passed' 'accept refuses if HEAD moved since task passed' -- accept --approved "$APPROVED" --group 1 --change c
-
-node_repo accept-no-task
-red_commit
-expect 1 'task-not-passed' 'accept refuses without a task pass' -- accept --approved "$APPROVED" --group 1 --change c
+CHECKED=$(git rev-parse --short HEAD)
+expect 0 "checked=$CHECKED" 'task reports the commit it checked' -- task --approved "$APPROVED" --group 1 --change c
+[ "$(grep -c '^- \[x\]' openspec/changes/c/tasks.md)" = 2 ] && ok 'task ticks every task in the group' || bad 'task ticks every task in the group'
+grep -q '^- \[ \] 2.1' openspec/changes/c/tasks.md && ok 'task leaves other groups alone' || bad 'task leaves other groups alone'
+git log -1 --format=%B | grep -q '^Green-For: 1$' && ok 'task commits a Green-For trailer' || bad 'task commits a Green-For trailer'
 
 node_repo accept-no-section
 red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null; implement
-"$GATE" task --approved "$APPROVED" --group 1 >/dev/null
 sed -i.bak 's/^## 1\. /## 9. /' openspec/changes/c/tasks.md && rm openspec/changes/c/tasks.md.bak; commit -m rename
-"$GATE" task --approved "$APPROVED" --group 1 >/dev/null
-expect 2 'no-group-section' 'accept fails when tasks.md has no such group' -- accept --approved "$APPROVED" --group 1 --change c
+expect 2 'no-group-section' 'task fails when tasks.md has no such group' -- task --approved "$APPROVED" --group 1 --change c
 
 node_repo accept-quick
 red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null; implement
-"$GATE" task --approved "$APPROVED" --group 1 >/dev/null
-expect 0 'PASS' 'accept works without a change for quick deliveries' -- accept --approved "$APPROVED" --group 1
+expect 0 'PASS' 'task works without a change for quick deliveries' -- task --approved "$APPROVED" --group 1
+
+node_repo head-moved
+red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null; implement
+REPORTED=$(git rev-parse HEAD~1)
+expect 1 'head-moved' 'task refuses a head other than the one reviewed' -- task --approved "$APPROVED" --group 1 --head "$REPORTED"
+expect 0 'PASS' 'task passes at the head that was reviewed' -- task --approved "$APPROVED" --group 1 --head "$(git rev-parse --short HEAD)"
+
+node_repo notest-reason
+expect 2 'missing-no-test-reason' 'a no-test task needs a reason' -- task --approved "$APPROVED" --group 2 --no-test
 
 # --- status ------------------------------------------------------------------
 
@@ -282,16 +277,19 @@ expect 0 'state=red-unchecked' 'status reports an unchecked red commit' -- statu
 "$GATE" red --approved "$APPROVED" --group 1 >/dev/null
 expect 0 'state=red' 'status reports a checked red commit' -- status --approved "$APPROVED" --group 1
 implement
-"$GATE" task --approved "$APPROVED" --group 1 >/dev/null
-"$GATE" accept --approved "$APPROVED" --group 1 --change c >/dev/null
+"$GATE" task --approved "$APPROVED" --group 1 --change c >/dev/null
 expect 0 'state=green' 'status reports green' -- status --approved "$APPROVED" --group 1
+
+node_repo status-forged
+red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null; implement
+git commit -q --no-verify --allow-empty -m 'feat: done' -m 'Green-For: 1'
+expect 1 'green-not-recorded' 'tampering: status refuses a Green-For that task did not write' -- status --approved "$APPROVED" --group 1
 
 # --- final -------------------------------------------------------------------
 
 accept_docs() {
   echo docs > README.md; commit -m docs
-  "$GATE" task --approved "$APPROVED" --group 2 --no-test >/dev/null
-  "$GATE" accept --approved "$APPROVED" --group 2 --change c --no-test 'docs only' >/dev/null
+  "$GATE" task --approved "$APPROVED" --group 2 --change c --no-test 'docs only' >/dev/null
 }
 
 node_repo final-ok
@@ -337,6 +335,13 @@ expect 1 'red-not-checked' 'tampering: final needs proof that red was checked' -
 node_repo final-empty
 expect 1 'nothing-delivered' 'final fails when nothing was delivered' -- final --approved "$APPROVED"
 
+node_repo final-forged-green
+red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null; implement
+sed -i.bak '/^## 2/,$d' openspec/changes/c/tasks.md; rm openspec/changes/c/tasks.md.bak
+sed -i.bak 's/- \[ \]/- [x]/' openspec/changes/c/tasks.md && rm openspec/changes/c/tasks.md.bak
+commit -m 'feat: done' -m 'Green-For: 1'
+expect 1 'green-not-recorded' 'tampering: final refuses a Green-For that task did not write' -- final --approved "$APPROVED"
+
 node_repo final-broken
 green_group; accept_docs
 echo 'exports.add = () => 0' > math.js; commit -m broke
@@ -356,7 +361,7 @@ APPROVED=$(git rev-parse HEAD)
 mkdir -p .github/workflows; echo x > .github/workflows/ci.yml; commit -m 'allowed ci'
 expect 0 'PASS' 'protect replaces the defaults at approval' -- baseline --approved "$APPROVED"
 mkdir -p locked; echo x > locked/a; commit -m locked
-expect 1 'protected-path' 'a custom protect pattern is enforced' -- task --approved "$APPROVED" --group 2 --no-test
+expect 1 'protected-path' 'a custom protect pattern is enforced' -- task --approved "$APPROVED" --group 2 --no-test docs
 git reset -q --hard HEAD~1
 echo notes > a.check.js; commit -m 'custom test name' -m 'Red-For: 1'
 expect 1 'passes-at-red' 'test-files pattern decides what counts as a test' -- red --approved "$APPROVED" --group 1
@@ -404,7 +409,7 @@ expect 2 'bad-pattern' 'an invalid test-files pattern is an error, not a pass' -
 
 node_repo bad-since
 echo '// edit' >> math.test.js; commit -m edit
-expect 2 'bad-since' 'an unknown --since is an error, not a pass' -- task --approved "$APPROVED" --group 2 --no-test --since deadbeef
+expect 2 'bad-since' 'an unknown --since is an error, not a pass' -- task --approved "$APPROVED" --group 2 --no-test refactor --since deadbeef
 
 node_repo unicode-protected
 red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null
@@ -445,28 +450,27 @@ node_repo local-files
 echo r > .config/spec-deliver/review-x.local.md
 expect 0 'PASS' 'local review files do not count as dirt' -- baseline --approved "$APPROVED"
 git add -f .config/spec-deliver/review-x.local.md; commit -m oops
-expect 0 'PASS' 'a committed local file is not a protected-path failure' -- task --approved "$APPROVED" --group 2 --no-test
+expect 0 'PASS' 'a committed local file is not a protected-path failure' -- task --approved "$APPROVED" --group 2 --no-test docs
 
 node_repo accept-staged
 red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null; implement
-"$GATE" task --approved "$APPROVED" --group 1 >/dev/null
 echo '// unverified' >> math.js; git add math.js
-expect 1 'dirty-tree' 'accept refuses staged work' -- accept --approved "$APPROVED" --group 1 --change c
+expect 1 'dirty-tree' 'task refuses staged work' -- task --approved "$APPROVED" --group 1 --change c
 
 node_repo accept-commit-fails
 red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null; implement
-"$GATE" task --approved "$APPROVED" --group 1 >/dev/null
 printf '#!/bin/sh\nexit 1\n' > .git/hooks/reference-transaction; chmod +x .git/hooks/reference-transaction
-expect 2 'commit-failed' 'accept reports a failed commit' -- accept --approved "$APPROVED" --group 1 --change c
+expect 2 'commit-failed' 'task reports a failed commit' -- task --approved "$APPROVED" --group 1 --change c
 rm .git/hooks/reference-transaction
-[ -z "$(git status --porcelain)" ] && ok 'a failed accept leaves the tree clean' || bad 'a failed accept leaves the tree clean' "$(git status --porcelain)"
+[ -z "$(git status --porcelain)" ] && ok 'a failed task commit leaves the tree clean' || bad 'a failed task commit leaves the tree clean' "$(git status --porcelain)"
+[ ! -f "$(git rev-parse --absolute-git-dir)/spec-deliver/1.task" ] && ok 'a failed task commit leaves no record' || bad 'a failed task commit leaves no record'
 
 node_repo indented-tasks
 printf '## 1. Multiply\n\n- [ ] 1.1 Parent\n  - [ ] 1.1.1 Child\n' > openspec/changes/c/tasks.md; commit -m tasks
 git commit -q --no-verify --allow-empty -m 'approve' -m 'Spec-Approved: c'
 APPROVED=$(git rev-parse HEAD)
 green_group
-grep -q '^  - \[x\] 1.1.1' openspec/changes/c/tasks.md && ok 'accept ticks indented tasks and keeps their indent' || bad 'accept ticks indented tasks and keeps their indent'
+grep -q '^  - \[x\] 1.1.1' openspec/changes/c/tasks.md && ok 'task ticks indented tasks and keeps their indent' || bad 'task ticks indented tasks and keeps their indent'
 expect 0 'PASS' 'final passes with indented tasks' -- final --approved "$APPROVED" --change c
 
 node_repo group-ids
@@ -479,15 +483,13 @@ green_group
 node_repo code-as-notest
 red_commit; git reset -q --hard HEAD~1
 echo docs > README.md; commit -m skip
-"$GATE" task --approved "$APPROVED" --group 1 --no-test >/dev/null
-"$GATE" accept --approved "$APPROVED" --group 1 --change c --no-test skip >/dev/null
+"$GATE" task --approved "$APPROVED" --group 1 --change c --no-test skip >/dev/null
 accept_docs
 expect 1 'no-test-not-allowed' 'tampering: a code group cannot go green with --no-test' -- final --approved "$APPROVED" --change c
 
 node_repo quick-notest
 echo docs > README.md; commit -m skip
-"$GATE" task --approved "$APPROVED" --group 1 --no-test >/dev/null
-"$GATE" accept --approved "$APPROVED" --group 1 --no-test skip >/dev/null
+"$GATE" task --approved "$APPROVED" --group 1 --no-test skip >/dev/null
 expect 1 'no-test-not-allowed' 'tampering: a quick delivery with a test command cannot skip red' -- final --approved "$APPROVED"
 
 node_repo drop-group
@@ -520,6 +522,80 @@ for f in conftest.py __mocks__/a.js fixtures/a.json e2e/a.cy.ts Tests/Helpers.cs
   git reset -q --hard HEAD~1
 done
 
+# --- found in field runs -------------------------------------------------------
+
+# A NuGet lock file inside a test project changed when the code gained a package.
+node_repo lockfile
+mkdir -p App.Tests; echo '{}' > App.Tests/packages.lock.json; commit -m seed
+git commit -q --no-verify --allow-empty -m 'approve' -m 'Spec-Approved: c'
+APPROVED=$(git rev-parse HEAD)
+red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null
+echo '{"new":1}' > App.Tests/packages.lock.json; implement
+expect 0 'PASS' 'a lock file inside a test project is not a test edit' -- task --approved "$APPROVED" --group 1
+node_repo lockfile-red
+mkdir -p App.Tests; echo '{}' > App.Tests/packages.lock.json; commit -m 'lock only' -m 'Red-For: 1'
+expect 1 'no-test-files' 'a lock file alone is not a red commit' -- red --approved "$APPROVED" --group 1
+
+# A test found wrong after red is fixed forward, never by rewriting history.
+test_fix_commit() {
+  echo '// fixed' >> mul.test.js
+  commit -m 'test: fix mul' -m "Test-Fix-For: ${1:-1}"
+}
+node_repo test-fix
+red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null
+test_fix_commit
+expect 0 'PASS' 'test-fix records a test-only fix after red' -- test-fix --approved "$APPROVED" --group 1
+implement
+expect 0 'PASS' 'task passes after a checked test fix' -- task --approved "$APPROVED" --group 1 --change c
+accept_docs
+expect 0 'PASS' 'final passes after a checked test fix' -- final --approved "$APPROVED" --change c
+
+node_repo test-fix-unchecked
+red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null
+test_fix_commit; implement
+expect 1 'test-fix-not-checked' 'tampering: an unchecked test fix does not unfreeze tests' -- task --approved "$APPROVED" --group 1
+
+node_repo test-fix-code
+red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null
+echo '// code' >> math.js; test_fix_commit
+expect 1 'not-a-test' 'a test fix may only touch tests' -- test-fix --approved "$APPROVED" --group 1
+
+node_repo test-fix-launder
+red_commit; "$GATE" red --approved "$APPROVED" --group 1 >/dev/null
+sed -i.bak 's/6/0/' mul.test.js && rm mul.test.js.bak; implement
+test_fix_commit
+expect 1 'test-edited' 'tampering: a test fix cannot launder an earlier test edit' -- test-fix --approved "$APPROVED" --group 1
+
+node_repo test-fix-green
+green_group; test_fix_commit
+expect 1 'already-green' 'a green group takes no test fix' -- test-fix --approved "$APPROVED" --group 1
+
+# The approved plan edits a protected path.
+node_repo allow
+approve_verify 'test: node --test' 'allow: ^\.github/workflows/deploy\.yml$'
+expect 0 'PASS' 'an allow line is not run as a command' -- baseline --approved "$APPROVED"
+mkdir -p .github/workflows; echo x > .github/workflows/deploy.yml; commit -m wiring
+expect 0 'PASS' 'allow lets the plan edit one protected path' -- task --approved "$APPROVED" --group 2 --no-test wiring
+echo x > .github/workflows/other.yml; commit -m more
+expect 1 'protected-path' 'allow does not open other protected paths' -- task --approved "$APPROVED" --group 2 --no-test wiring
+
+node_repo bad-allow
+approve_verify 'test: node --test' 'allow: ('
+expect 2 'bad-pattern' 'an invalid allow pattern is an error, not a pass' -- baseline --approved "$APPROVED"
+
+# preflight runs before approval, on the working-tree verify file.
+node_repo preflight
+OUT=$("$GATE" preflight .github/workflows/deploy.yml src/a.js 2>&1)
+[[ "$(tail -1 <<<"$OUT")" == 'GATE preflight PASS'*'protected=1' ]] && ok 'preflight counts protected paths' || bad 'preflight counts protected paths' "$OUT"
+grep -qx 'protected: .github/workflows/deploy.yml' <<<"$OUT" && ok 'preflight names each protected path' || bad 'preflight names each protected path' "$OUT"
+expect 0 'protected=0' 'preflight with no paths still runs verify' -- preflight
+echo 'test: false' > .config/spec-deliver/verify
+expect 1 'verify-failed' 'preflight reads the uncommitted verify file' -- preflight
+echo 'allow: ^\.github/' >> .config/spec-deliver/verify; echo 'test: true' > .config/spec-deliver/verify; echo 'allow: ^\.github/' >> .config/spec-deliver/verify
+expect 0 'protected=0' 'preflight applies allow' -- preflight .github/workflows/deploy.yml
+
+expect 0 'version=' 'version needs no repo or approval' -- version
+
 # --- other stacks ------------------------------------------------------------
 
 python_cycle() {
@@ -551,7 +627,6 @@ T
   echo 'def mul(a, b): return a * b' >> calc.py
   commit -m 'feat: mul'
   expect 0 'PASS' 'python: task' -- task --approved "$APPROVED" --group 1
-  expect 0 'PASS' 'python: accept' -- accept --approved "$APPROVED" --group 1
   expect 0 'PASS' 'python: final' -- final --approved "$APPROVED"
 }
 python_cycle

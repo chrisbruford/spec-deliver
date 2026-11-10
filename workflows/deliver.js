@@ -4,7 +4,7 @@ export const meta = {
   whenToUse: 'Started by /spec-deliver:spec-deliver after human approval. Refuses to run without an approved commit.',
   phases: [
     { title: 'Preflight', detail: 'check gate state and a green baseline' },
-    { title: 'Deliver', detail: 'per group: red, green, gate, review, accept' },
+    { title: 'Deliver', detail: 'per group: red, green, review, gate' },
   ],
 }
 
@@ -26,6 +26,8 @@ const refusal = (() => {
   for (const group of groups) {
     if (!SAFE_ID.test(group.id || '')) return `invalid group id: ${group.id}`
     if (!KINDS.includes(group.kind)) return `invalid group kind: ${group.kind}`
+    if (group.qa && group.kind !== 'code') return `qa group ${group.id} must be kind code`
+    if (group.detail !== undefined && typeof group.detail !== 'string') return `invalid detail for group ${group.id}`
   }
   return null
 })()
@@ -95,14 +97,13 @@ async function gate(mode, group, extra = '') {
   return { ok, line, tail: report.tail || '' }
 }
 
-const headOf = line => /head=(\S+)/.exec(line)?.[1] ?? ''
 const baseOf = line => /base=(\S+)/.exec(line)?.[1] ?? ''
-const sameCommit = (a, b) => Boolean(a && b) && (a.startsWith(b) || b.startsWith(a))
 
 const groundRules = `Working rules:
 - Use the Write and Edit tools for files.
 - Run one command per Bash call, with no && chaining, pipes or redirects. Allow rules match single commands.
 - Commit your work. The gate checks HEAD and fails on uncommitted changes.
+- Never write Red-For, Green-For, Test-Fix-For or No-Test trailers, and never tick tasks.md. The gate writes those.
 - Stay in scope. Small fixes in your path are welcome. Cross-cutting refactors are not.`
 
 const source = change
@@ -113,7 +114,7 @@ const constraints = input.constraints ? `\n\nConstraints from the proposal and d
 
 const groupBrief = group => `${source}
 
-You are working on group ${group.id}: ${group.title}.${constraints}`
+You are working on group ${group.id}: ${group.title}.${group.detail ? `\n\n${group.detail}` : ''}${constraints}`
 
 async function writeTests(group) {
   let feedback = ''
@@ -126,7 +127,7 @@ Do not write production logic. On compiled stacks, commit minimal signature stub
 If repo pre-commit hooks reject failing tests, --no-verify is allowed on this commit only.
 
 Make exactly one commit, with this trailer:
-git commit --no-verify -m "test: <summary>" -m "Red-For: ${group.id}"
+git commit --no-verify -m "test: <summary>" --trailer "Red-For: ${group.id}"
 
 ${groundRules}${feedback}
 
@@ -145,13 +146,23 @@ Return the short HEAD sha. Set blocked to a reason if you cannot proceed, otherw
   throw stop('red-failed', group.id, feedback)
 }
 
+function taskFlags(group, startHead) {
+  // A QA group is not in the approved tasks.md, so there is nothing to tick.
+  const change_ = change && !group.qa ? ` --change ${change}` : ''
+  if (group.kind === 'code') return change_
+  if (group.kind === 'refactor') return `${change_} --no-test refactor-group --since ${startHead}`
+  return `${change_} --no-test no-test-group`
+}
+
+// Review comes before the gate, because a passing task gate commits Green-For.
 async function implement(group, startHead) {
-  const taskFlags = group.kind === 'code' ? '' : group.kind === 'refactor' ? ` --no-test --since ${startHead}` : ' --no-test'
   const goal = group.kind === 'code'
     ? 'Make the failing tests for this group pass with the minimum real code. No placeholders or stubs.'
     : group.kind === 'refactor'
       ? 'Do this refactor without changing behaviour. Test files must not change.'
       : 'Do this work. It has no tests of its own, and the repo verify commands must still pass.'
+  // Work with no tests of its own is mostly wiring and docs, which does not need the strongest model.
+  const model = group.kind === 'code' ? {} : { model: 'sonnet' }
   let feedback = ''
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
@@ -161,23 +172,19 @@ async function implement(group, startHead) {
 ${goal}
 Search before you write: do not assume code does not exist.
 Never edit test files, specs, proposal.md, design.md, .config/spec-deliver/verify, CI config or test runner config. The gate fails on any of these.
-If a test looks wrong, do not change it. Set blocked to the reason, and a human will decide.
+If a test is wrong, do not change it. Set blocked to "test-defect: " followed by the file and line, why the test is wrong, and the exact change you propose. A human decides.
 Fix forward with new commits. Never rewrite history: no reset, rebase or amend.
+Run the test command before you finish.
 
 ${groundRules}${feedback}
 
 Return the short HEAD sha. Set blocked to a reason if you cannot proceed, otherwise an empty string.`,
-      { label: `implement ${group.id}`, schema: WORK_SCHEMA, phase: 'Deliver' },
+      { label: `implement ${group.id}`, schema: WORK_SCHEMA, phase: 'Deliver', ...model },
     )
-    if (work.blocked) throw stop('blocked', group.id, work.blocked)
-
-    const task = await gate('task', group, taskFlags)
-    if (!task.ok) {
-      feedback = `\n\nThe previous attempt failed the gate:\n${task.line}\n${task.tail}`
-      continue
-    }
-    if (!sameCommit(work.head, headOf(task.line))) {
-      feedback = `\n\nThe gate ran at head ${headOf(task.line)} but you reported ${work.head}.`
+    if (work.blocked) throw stop(/^test-defect/i.test(work.blocked) ? 'test-defect' : 'blocked', group.id, work.blocked)
+    // The sha reaches a gate command, so it must be a plain sha.
+    if (!SAFE_SHA.test(work.head || '')) {
+      feedback = '\n\nThe previous attempt did not return a commit sha. Commit your work and return the short HEAD sha.'
       continue
     }
 
@@ -191,16 +198,18 @@ Do not report style.
 Read files with the Read tool. Run one command per Bash call, with no pipes or chaining, because allow rules match single commands.`,
       { label: `review ${group.id}`, agentType: 'spec-deliver:qa-code-reviewer', schema: REVIEW_SCHEMA, phase: 'Deliver' },
     )
-    if (review.blocking.length === 0) return review.notes
-    feedback = `\n\nThe reviewer blocked acceptance:\n- ${review.blocking.join('\n- ')}`
+    if (review.blocking.length > 0) {
+      feedback = `\n\nThe reviewer blocked acceptance:\n- ${review.blocking.join('\n- ')}`
+      continue
+    }
+
+    const task = await gate('task', group, `${taskFlags(group, startHead)} --head ${work.head}`)
+    if (task.ok) return review.notes
+    feedback = task.line.includes('head-moved')
+      ? `\n\nThe gate found that HEAD is not ${work.head}, the commit you reported. Commit all work and report the real HEAD.`
+      : `\n\nThe previous attempt failed the gate:\n${task.line}\n${task.tail}`
   }
   throw stop('retries-exhausted', group.id, feedback)
-}
-
-function acceptFlags(group) {
-  const change_ = change ? ` --change ${change}` : ''
-  if (group.kind === 'code') return change_
-  return `${change_} --no-test ${group.kind === 'refactor' ? 'refactor-group' : 'no-test-group'}`
 }
 
 const delivered = []
@@ -241,9 +250,6 @@ try {
 
     const reviewNotes = await implement(group, startHead)
     notes.push(...reviewNotes.map(note => `group ${group.id}: ${note}`))
-
-    const accepted = await gate('accept', group, acceptFlags(group))
-    if (!accepted.ok) throw stop('accept-failed', group.id, `${accepted.line}\n${accepted.tail}`)
     delivered.push(group.id)
     log(`Group ${group.id} accepted`)
   }

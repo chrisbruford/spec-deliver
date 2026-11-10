@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 # spec-deliver-gate: the deterministic definition of done for a delivery.
 #
+#   spec-deliver-gate version
+#   spec-deliver-gate preflight [PATH...]
 #   spec-deliver-gate baseline --approved SHA
 #   spec-deliver-gate status   --approved SHA --group ID
 #   spec-deliver-gate red      --approved SHA --group ID
-#   spec-deliver-gate task     --approved SHA --group ID [--no-test [--since SHA]]
-#   spec-deliver-gate accept   --approved SHA --group ID [--change NAME] [--no-test REASON]
+#   spec-deliver-gate test-fix --approved SHA --group ID
+#   spec-deliver-gate task     --approved SHA --group ID [--change NAME] [--head SHA] [--no-test REASON [--since SHA]]
 #   spec-deliver-gate final    --approved SHA [--change NAME]
 #
 # Rules come from .config/spec-deliver/verify as it stood at the approved commit,
-# so nothing committed during delivery can weaken them.
+# so nothing committed during delivery can weaken them. preflight reads the
+# working-tree copy, because it runs before approval.
 #
 # The last line of output is always: GATE <mode> <PASS|FAIL|ERROR> ...
 # Exit codes: 0 pass, 1 fail, 2 usage or configuration error.
@@ -20,6 +23,8 @@
 set -uo pipefail
 
 DEFAULT_TEST_FILES='(^|/)([Tt]ests?|__tests__|__mocks__|fixtures|specs?)/|[._-](test|spec|cy)s?\.[^/]+$|(^|/)test_[^/]+$|(^|/)conftest\.py$|Tests?\.[^/]+$|\.Tests?/'
+# Generated lock files sit inside test projects but are never tests.
+LOCKFILES='(^|/)(packages\.lock\.json|package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|Cargo\.lock|go\.sum|poetry\.lock|uv\.lock|Pipfile\.lock|Gemfile\.lock|composer\.lock|\.terraform\.lock\.hcl)$'
 DEFAULT_PROTECT='^\.config/spec-deliver/|^\.github/workflows/|^\.claude/settings|^openspec/specs/|^openspec/changes/[^/]+/(specs/|proposal\.md|design\.md)|(^|/)(jest|vitest|karma|playwright|cypress)\.config\.|(^|/)(pytest\.ini|tox\.ini|\.mocharc[^/]*|\.nycrc[^/]*|\.runsettings)$'
 # Run-time files, such as the state file and local review reports. Never part of a delivery.
 LOCAL_GLOB='.config/spec-deliver/*.local.*'
@@ -27,7 +32,8 @@ LOCAL_FILES='^\.config/spec-deliver/[^/]*\.local\.'
 
 MODE=${1:-}
 [ $# -gt 0 ] && shift
-APPROVED='' GROUP='' CHANGE='' SINCE='' NO_TEST=0 NO_TEST_REASON=''
+APPROVED='' GROUP='' CHANGE='' SINCE='' EXPECT_HEAD='' NO_TEST=0 NO_TEST_REASON=''
+PATHS=()
 
 head_sha() { git rev-parse --short HEAD 2>/dev/null || echo none; }
 
@@ -39,7 +45,11 @@ fail() { finish 1 FAIL "reason=$1"; }
 error() { finish 2 ERROR "reason=$1"; }
 
 case "$MODE" in
-  baseline | status | red | task | accept | final) ;;
+  preflight | baseline | status | red | test-fix | task | final) ;;
+  version)
+    VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$(dirname "$0")/../.claude-plugin/plugin.json" 2>/dev/null | head -1)
+    finish 0 PASS "version=${VERSION:-unknown}"
+    ;;
   *) error unknown-mode ;;
 esac
 
@@ -49,29 +59,37 @@ while [ $# -gt 0 ]; do
     --group) GROUP=${2:-}; shift 2 || error bad-arguments ;;
     --change) CHANGE=${2:-}; shift 2 || error bad-arguments ;;
     --since) SINCE=${2:-}; shift 2 || error bad-arguments ;;
+    --head) EXPECT_HEAD=${2:-}; shift 2 || error bad-arguments ;;
     --no-test)
       NO_TEST=1
-      if [ "$MODE" = accept ]; then NO_TEST_REASON=${2:-}; shift 2 || error bad-arguments; else shift; fi
+      case "${2:-}" in -* | '') shift ;; *) NO_TEST_REASON=$2; shift 2 ;; esac
       ;;
-    *) error "unknown-argument" ;;
+    -*) error "unknown-argument" ;;
+    *)
+      [ "$MODE" = preflight ] || error "unknown-argument"
+      PATHS+=("$1"); shift
+      ;;
   esac
 done
 
 # These values reach git patterns and file names, so keep them to safe characters.
 [[ "$GROUP" =~ ^[A-Za-z0-9_-]*$ ]] || error bad-group
 [[ "$CHANGE" =~ ^[A-Za-z0-9._-]*$ ]] || error bad-change
-[ -n "$APPROVED" ] || error missing-approved
-case "$MODE" in baseline | final) ;; *) [ -n "$GROUP" ] || error missing-group ;; esac
-[ "$MODE" = accept ] && [ "$NO_TEST" = 1 ] && [ -z "$NO_TEST_REASON" ] && error missing-no-test-reason
+case "$MODE" in preflight | baseline | final) ;; *) [ -n "$GROUP" ] || error missing-group ;; esac
+[ "$NO_TEST" = 1 ] && [ -z "$NO_TEST_REASON" ] && error missing-no-test-reason
 
 TOP=$(git rev-parse --show-toplevel 2>/dev/null) || error not-a-repo
 cd "$TOP" || error not-a-repo
 
-git rev-parse -q --verify "$APPROVED^{commit}" >/dev/null || error unknown-approved
-git log -1 --format=%B "$APPROVED" | grep -q '^Spec-Approved: ' || error not-approved
-git merge-base --is-ancestor "$APPROVED" HEAD || error not-ancestor
-
-VERIFY=$(git show "$APPROVED:.config/spec-deliver/verify" 2>/dev/null) || error no-verify-file
+if [ "$MODE" = preflight ]; then
+  VERIFY=$(cat .config/spec-deliver/verify 2>/dev/null) || error no-verify-file
+else
+  [ -n "$APPROVED" ] || error missing-approved
+  git rev-parse -q --verify "$APPROVED^{commit}" >/dev/null || error unknown-approved
+  git log -1 --format=%B "$APPROVED" | grep -q '^Spec-Approved: ' || error not-approved
+  git merge-base --is-ancestor "$APPROVED" HEAD || error not-ancestor
+  VERIFY=$(git show "$APPROVED:.config/spec-deliver/verify" 2>/dev/null) || error no-verify-file
+fi
 
 STATE=$(git rev-parse --absolute-git-dir)/spec-deliver
 mkdir -p "$STATE" || error no-state-dir
@@ -85,15 +103,20 @@ verify_value() { sed -n "s/^$1:[[:space:]]*//p" <<<"$VERIFY_LINES" | head -1; }
 
 TEST_FILES=$(verify_value test-files); TEST_FILES=${TEST_FILES:-$DEFAULT_TEST_FILES}
 PROTECT=$(verify_value protect); PROTECT=${PROTECT:-$DEFAULT_PROTECT}
+# Paths the approved plan may change even though they are protected. The default matches nothing.
+ALLOW=$(verify_value allow); ALLOW=${ALLOW:-'^$'}
 TEST_COMMAND=$(verify_value test)
 
 # grep exits 2 on a bad pattern, which would otherwise read as "nothing matched".
-for pattern in "$TEST_FILES" "$PROTECT"; do
+for pattern in "$TEST_FILES" "$PROTECT" "$ALLOW"; do
   grep -Eq -e "$pattern" </dev/null
   [ $? -le 1 ] || error bad-pattern
 done
 
-commands() { grep -Ev '^(protect|test-files):' <<<"$VERIFY_LINES"; }
+commands() { grep -Ev '^(protect|test-files|allow):' <<<"$VERIFY_LINES"; }
+
+test_paths() { grep -E -e "$TEST_FILES" | grep -Ev -e "$LOCKFILES"; }
+protected_paths() { grep -Ev "$LOCAL_FILES" | grep -E -e "$PROTECT" | grep -Ev -e "$ALLOW"; }
 
 # Runs one command, keeping full output in the log and showing the tail.
 run_logged() { # run_logged <log> <command>
@@ -134,7 +157,7 @@ commit_files() { # <commit> [extra diff-tree flags]
 require_protected_intact() {
   local files hit
   files=$(changed_files "$APPROVED" HEAD) || error git-diff-failed
-  hit=$(grep -Ev "$LOCAL_FILES" <<<"$files" | grep -E -e "$PROTECT" | head -1)
+  hit=$(protected_paths <<<"$files" | head -1)
   [ -z "$hit" ] || fail "protected-path path=$hit"
 }
 
@@ -142,7 +165,7 @@ require_protected_intact() {
 require_tests_unchanged() { # <from> <to>
   local files hit
   files=$(changed_files "$1" "$2") || error git-diff-failed
-  hit=$(grep -E -e "$TEST_FILES" <<<"$files" | head -1)
+  hit=$(test_paths <<<"$files" | head -1)
   [ -z "$hit" ] || fail "test-edited path=$hit"
 }
 
@@ -160,12 +183,32 @@ require_tests_present() { # <red>
   while IFS= read -r path; do
     [ -n "$path" ] || continue
     git cat-file -e "HEAD:$path" 2>/dev/null || fail "test-deleted path=$path"
-  done < <(grep -E -e "$TEST_FILES" <<<"$files")
+  done < <(test_paths <<<"$files")
 }
 
 # Newest commit since approval carrying a trailer. Group ids are already validated.
-trailer_commit() { # <trailer> <group>
-  git log --format=%H -E --grep="^$1: $2\$" -1 "$APPROVED..HEAD"
+trailer_commit() { # <trailer> <group> [upto]
+  git log --format=%H -E --grep="^$1: $2\$" -1 "$APPROVED..${3:-HEAD}"
+}
+
+# Tests are frozen from the red commit, or from the newest test fix the gate checked.
+# Prints that commit, or returns 1 if a test fix was never checked.
+test_base() { # <group> <upto>
+  local red fix
+  red=$(trailer_commit Red-For "$1" "$2")
+  fix=$(trailer_commit Test-Fix-For "$1" "$2")
+  if [ -z "$fix" ] || ! git merge-base --is-ancestor "$red" "$fix"; then
+    echo "$red"
+    return 0
+  fi
+  [ -f "$STATE/$1.testfix" ] && [ "$(cat "$STATE/$1.testfix")" = "$fix" ] || return 1
+  echo "$fix"
+}
+
+# A real Green-For commit comes from task: its parent passed task, and it only ticks tasks.
+green_recorded() { # <group> <green sha>
+  [ -f "$STATE/$1.task" ] && [ "$(cat "$STATE/$1.task")" = "$(git rev-parse "$2^" 2>/dev/null)" ] || return 1
+  [ -z "$(commit_files "$2" | grep -v '^$' | grep -Ev '^openspec/changes/[^/]+/tasks\.md$')" ]
 }
 
 red_checked() { # <group> <red sha>
@@ -217,6 +260,15 @@ tick_group() { # <file> <group>
 }
 
 case "$MODE" in
+  preflight)
+    for path in "${PATHS[@]+"${PATHS[@]}"}"; do
+      [ -n "$(protected_paths <<<"$path")" ] && echo "protected: $path"
+    done
+    COUNT=$(printf '%s\n' "${PATHS[@]+"${PATHS[@]}"}" | grep -v '^$' | protected_paths | grep -c .)
+    run_verify
+    finish 0 PASS "protected=$COUNT"
+    ;;
+
   baseline)
     require_clean
     run_verify
@@ -225,7 +277,10 @@ case "$MODE" in
 
   status)
     RED=$(trailer_commit Red-For "$GROUP")
-    if [ -n "$(trailer_commit Green-For "$GROUP")" ]; then CURRENT=green
+    GREEN=$(trailer_commit Green-For "$GROUP")
+    if [ -n "$GREEN" ]; then
+      green_recorded "$GROUP" "$GREEN" || fail green-not-recorded
+      CURRENT=green
     elif [ -z "$RED" ]; then CURRENT=none
     elif red_checked "$GROUP" "$RED"; then CURRENT=red
     else CURRENT='red-unchecked'
@@ -241,7 +296,7 @@ case "$MODE" in
     [ -n "$RED" ] || fail no-red-commit
     [ "$RED" = "$(git rev-parse HEAD)" ] || fail head-not-red
     FILES=$(commit_files "$RED") || error git-diff-failed
-    grep -qE -e "$TEST_FILES" <<<"$FILES" || fail no-test-files
+    [ -n "$(test_paths <<<"$FILES")" ] || fail no-test-files
     require_clean
     require_protected_intact
     echo "--- red: $TEST_COMMAND"
@@ -254,8 +309,29 @@ case "$MODE" in
     finish 0 PASS "log=$STATE/$GROUP.red.log"
     ;;
 
+  test-fix)
+    require_clean
+    require_protected_intact
+    RED=$(trailer_commit Red-For "$GROUP")
+    [ -n "$RED" ] && red_checked "$GROUP" "$RED" || fail red-not-checked
+    [ -z "$(trailer_commit Green-For "$GROUP")" ] || fail already-green
+    [ "$(trailer_commit Test-Fix-For "$GROUP")" = "$(git rev-parse HEAD)" ] || fail head-not-test-fix
+    BASE=$(test_base "$GROUP" HEAD^) || fail test-fix-not-checked
+    require_tests_unchanged "$BASE" HEAD^
+    FILES=$(commit_files HEAD) || error git-diff-failed
+    [ -n "$(test_paths <<<"$FILES")" ] || fail no-test-files
+    hit=$(grep -v '^$' <<<"$FILES" | grep -Ev -e "$TEST_FILES" | grep -Ev -e "$LOCKFILES" | head -1)
+    [ -z "$hit" ] || fail "not-a-test path=$hit"
+    git rev-parse HEAD >"$STATE/$GROUP.testfix"
+    finish 0 PASS
+    ;;
+
+  # Passing task is acceptance: it ticks the group and commits Green-For.
   task)
     require_clean
+    if [ -n "$EXPECT_HEAD" ]; then
+      [ "$(git rev-parse -q --verify "$EXPECT_HEAD^{commit}")" = "$(git rev-parse HEAD)" ] || fail head-moved
+    fi
     require_protected_intact
     if [ "$NO_TEST" = 1 ]; then
       if [ -n "$SINCE" ]; then
@@ -265,22 +341,17 @@ case "$MODE" in
     else
       RED=$(trailer_commit Red-For "$GROUP")
       [ -n "$RED" ] && red_checked "$GROUP" "$RED" || fail red-not-checked
-      require_tests_unchanged "$RED" HEAD
+      BASE=$(test_base "$GROUP" HEAD) || fail test-fix-not-checked
+      require_tests_unchanged "$BASE" HEAD
       require_implementation "$RED"
     fi
     run_verify
-    git rev-parse HEAD >"$STATE/$GROUP.task"
-    finish 0 PASS
-    ;;
-
-  accept)
-    require_clean
-    [ -f "$STATE/$GROUP.task" ] && [ "$(cat "$STATE/$GROUP.task")" = "$(git rev-parse HEAD)" ] || fail task-not-passed
+    CHECKED=$(git rev-parse HEAD)
     if [ -n "$CHANGE" ]; then
       TASKS=openspec/changes/$CHANGE/tasks.md
       [ -f "$TASKS" ] || error no-tasks-file
       tick_group "$TASKS" "$GROUP" || error no-group-section
-      git add "$TASKS"
+      git add -f "$TASKS"
     fi
     TRAILERS="Green-For: $GROUP"
     [ "$NO_TEST" = 1 ] && TRAILERS="$TRAILERS
@@ -290,7 +361,9 @@ No-Test: $NO_TEST_REASON"
       [ -z "$CHANGE" ] || git checkout -q HEAD -- "$TASKS"
       error commit-failed
     fi
-    finish 0 PASS
+    # Written after the commit, so a failed commit leaves no record behind.
+    echo "$CHECKED" >"$STATE/$GROUP.task"
+    finish 0 PASS "checked=$(git rev-parse --short "$CHECKED")"
     ;;
 
   final)
@@ -312,11 +385,15 @@ No-Test: $NO_TEST_REASON"
       red=$(trailer_commit Red-For "$group")
       if [ -n "$red" ]; then
         red_checked "$group" "$red" || fail "red-not-checked group=$group"
-        require_tests_unchanged "$red" "$commit"
+        base=$(test_base "$group" "$commit") || fail "test-fix-not-checked group=$group"
+        require_tests_unchanged "$base" "$commit"
         require_tests_present "$red"
       else
         git log -1 --format=%B "$commit" | grep -q '^No-Test: ' || fail "green-without-red group=$group"
         no_test_allowed "$group" || fail "no-test-not-allowed group=$group"
+      fi
+      if [ "$commit" = "$(trailer_commit Green-For "$group")" ]; then
+        green_recorded "$group" "$commit" || fail "green-not-recorded group=$group"
       fi
     done
 

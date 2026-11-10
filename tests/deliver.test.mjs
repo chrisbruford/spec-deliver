@@ -60,14 +60,14 @@ test('delivers a code group in order', async () => {
   const { result, calls } = await run(base, world())
   assert.equal(result.status, 'complete')
   assert.deepEqual(result.delivered, ['1'])
-  assert.deepEqual(labels(calls), ['gate:status', 'gate:baseline', 'test-writer', 'gate:red', 'implement', 'gate:task', 'review', 'gate:accept'])
+  assert.deepEqual(labels(calls), ['gate:status', 'gate:baseline', 'test-writer', 'gate:red', 'implement', 'review', 'gate:task'])
 })
 
 test('gate commands carry approval, group and change', async () => {
   const { calls } = await run(base, world())
-  const accept = calls.find(c => modeOf(c) === 'accept')
-  assert.match(accept.prompt, /spec-deliver-gate accept --approved abc1234 --group 1 --change add-mul/)
-  assert.equal(accept.agentType, 'spec-deliver:gate-runner')
+  const task = calls.find(c => modeOf(c) === 'task')
+  assert.match(task.prompt, /spec-deliver-gate task --approved abc1234 --group 1 --change add-mul --head def5678/)
+  assert.equal(task.agentType, 'spec-deliver:gate-runner')
 })
 
 test('skips groups already green', async () => {
@@ -78,7 +78,7 @@ test('skips groups already green', async () => {
 })
 
 test('a null agent result fails closed', async () => {
-  for (const point of ['status', 'baseline', 'red', 'task', 'accept', 'writer', 'implementer', 'reviewer']) {
+  for (const point of ['status', 'baseline', 'red', 'task', 'writer', 'implementer', 'reviewer']) {
     const { result } = await run(base, world({ [point]: () => null }))
     assert.equal(result.status, 'stopped', point)
     assert.match(result.reason, /agent-failed/, point)
@@ -125,7 +125,6 @@ test('the implementer gets 2 retries, then the run stops', async () => {
   assert.equal(result.status, 'stopped')
   assert.equal(result.group, '1')
   assert.equal(calls.filter(c => c.label.startsWith('implement')).length, 3)
-  assert.equal(calls.some(c => modeOf(c) === 'accept'), false)
 })
 
 test('the group reviewer is told allow rules match single commands', async () => {
@@ -156,23 +155,49 @@ test('blocking review findings go back to the implementer', async () => {
   assert.match(second.prompt, /the test is vacuous/)
 })
 
-test('review that never clears stops before accept', async () => {
+test('review that never clears stops before the task gate', async () => {
   const { result, calls } = await run(base, world({ reviewer: () => ({ blocking: ['still wrong'], notes: [] }) }))
   assert.equal(result.status, 'stopped')
-  assert.equal(calls.some(c => modeOf(c) === 'accept'), false)
+  assert.equal(calls.some(c => modeOf(c) === 'task'), false)
 })
 
 test('an implementer reporting a wrong test stops for a human', async () => {
   const { result, calls } = await run(base, world({ implementer: () => ({ head: 'def5678', blocked: 'test contradicts the spec' }) }))
   assert.equal(result.status, 'stopped')
+  assert.equal(result.reason, 'blocked')
   assert.match(result.detail, /contradicts the spec/)
   assert.equal(calls.filter(c => c.label.startsWith('implement')).length, 1)
 })
 
-test('a gate running on a different head than reported is not a pass', async () => {
-  const { result } = await run(base, world({ implementer: () => ({ head: '9999999', blocked: '' }) }))
+test('a test defect stops with its own reason, so the skill can offer a test fix', async () => {
+  const { result } = await run(base, world({ implementer: () => ({ head: 'def5678', blocked: 'test-defect: a.test.js:9 wrong collation' }) }))
   assert.equal(result.status, 'stopped')
-  assert.match(result.detail, /head/)
+  assert.equal(result.reason, 'test-defect')
+  assert.match(result.detail, /collation/)
+})
+
+test('the task gate checks the head the implementer reported', async () => {
+  const { calls } = await run(base, world({ implementer: () => ({ head: '9999999', blocked: '' }) }))
+  assert.match(calls.find(c => modeOf(c) === 'task').prompt, /--head 9999999/)
+})
+
+test('a head that moved after review goes back to the implementer', async () => {
+  let tries = 0
+  const { result, calls } = await run(base, world({ task: () => (++tries === 1 ? failed('task', 'head-moved') : pass('task')) }))
+  assert.equal(result.status, 'complete')
+  assert.match(calls.filter(c => c.label.startsWith('implement'))[1].prompt, /not def5678/)
+})
+
+test('a head that is not a sha never reaches a command', async () => {
+  const { result, calls } = await run(base, world({ implementer: () => ({ head: '$(id)', blocked: '' }) }))
+  assert.equal(result.status, 'stopped')
+  assert.equal(calls.some(c => c.prompt.includes('$(id)')), false)
+})
+
+test('agents are told the gate alone writes trailers and ticks', async () => {
+  const { calls } = await run(base, world())
+  assert.match(calls.find(c => c.label.startsWith('implement')).prompt, /never write Red-For, Green-For/i)
+  assert.match(calls.find(c => c.label.startsWith('test-writer')).prompt, /--trailer "Red-For: 1"/)
 })
 
 test('the agent cap stops the run', async () => {
@@ -192,32 +217,52 @@ test('the token cap stops the run', async () => {
 test('resuming at a checked red skips the test writer and baseline', async () => {
   const { result, calls } = await run(base, world({ status: () => pass('status', 'state=red base=aaa1111') }))
   assert.equal(result.status, 'complete')
-  assert.deepEqual(labels(calls), ['gate:status', 'implement', 'gate:task', 'review', 'gate:accept'])
+  assert.deepEqual(labels(calls), ['gate:status', 'implement', 'review', 'gate:task'])
 })
 
 test('resuming at an unchecked red reruns the red check', async () => {
   const { calls } = await run(base, world({ status: () => pass('status', 'state=red-unchecked base=aaa1111') }))
-  assert.deepEqual(labels(calls), ['gate:status', 'gate:red', 'implement', 'gate:task', 'review', 'gate:accept'])
+  assert.deepEqual(labels(calls), ['gate:status', 'gate:red', 'implement', 'review', 'gate:task'])
 })
 
-test('no-test groups skip red and accept with a reason', async () => {
+test('no-test groups skip red and pass the gate with a reason', async () => {
   const { result, calls } = await run({ ...base, groups: [{ id: '2', title: 'Docs', kind: 'no-test' }] }, world())
   assert.equal(result.status, 'complete')
   assert.equal(calls.some(c => c.label.startsWith('test-writer')), false)
-  assert.match(calls.find(c => modeOf(c) === 'task').prompt, /--no-test/)
-  assert.match(calls.find(c => modeOf(c) === 'accept').prompt, /--no-test no-test-group/)
+  assert.match(calls.find(c => modeOf(c) === 'task').prompt, /--change add-mul --no-test no-test-group/)
+})
+
+test('only code groups inherit the session model', async () => {
+  const { calls } = await run({ ...base, groups: [{ id: '1', title: 'A', kind: 'code' }, { id: '2', title: 'Docs', kind: 'no-test' }] }, world())
+  const implementers = calls.filter(c => c.label.startsWith('implement'))
+  assert.equal(implementers[0].model, undefined)
+  assert.equal(implementers[1].model, 'sonnet')
+})
+
+test('a QA group carries its finding and ticks nothing', async () => {
+  const groups = [{ id: 'qa1', title: 'Sign out ends the SSO session', kind: 'code', qa: true, detail: 'Finding: sign out does nothing' }]
+  const { result, calls } = await run({ ...base, groups }, world())
+  assert.equal(result.status, 'complete')
+  assert.match(calls.find(c => c.label.startsWith('test-writer')).prompt, /sign out does nothing/)
+  assert.doesNotMatch(calls.find(c => modeOf(c) === 'task').prompt, /--change/)
+})
+
+test('a QA group must be test-first', async () => {
+  const { result, calls } = await run({ ...base, groups: [{ id: 'qa1', title: 't', kind: 'no-test', qa: true }] }, world())
+  assert.equal(result.status, 'refused')
+  assert.equal(calls.length, 0)
 })
 
 test('refactor groups pin the starting commit', async () => {
   const { calls } = await run({ ...base, groups: [{ id: '3', title: 'Tidy', kind: 'refactor' }] }, world())
-  assert.match(calls.find(c => modeOf(c) === 'task').prompt, /--no-test --since aaa1111/)
+  assert.match(calls.find(c => modeOf(c) === 'task').prompt, /--no-test refactor-group --since aaa1111/)
 })
 
 test('quick deliveries work from a brief, without a change', async () => {
   const { result, calls } = await run({ approvedSha: SHA, brief: 'mul multiplies', groups: [{ id: '1', title: 'Fix', kind: 'code' }] }, world())
   assert.equal(result.status, 'complete')
   assert.match(calls.find(c => c.label.startsWith('test-writer')).prompt, /mul multiplies/)
-  assert.doesNotMatch(calls.find(c => modeOf(c) === 'accept').prompt, /--change/)
+  assert.doesNotMatch(calls.find(c => modeOf(c) === 'task').prompt, /--change/)
 })
 
 test('a resumed group is reviewed from its real base', async () => {
