@@ -73,4 +73,10 @@ check "init offers to keep tooling out of the repo" grep -q '.git/info/exclude' 
 check "init states the single-command rule" grep -q 'one command per Bash call' "$I"
 check "settings do not allow git rm" absent 'git rm' "$C"
 
+# Found in the add-mutation-tests field run (ems).
+check "the approval subject passes Conventional Commits" absent '"spec: approve' "$S"
+check "the plan says tests that pass today are no-test" grep -q 'mutation-killing' "$S"
+check "a test fix in a group with no red step reruns it as no-test" grep -qF 'set to `no-test`' "$S"
+check "the evidence pack quotes each Gate: command log" grep -q 'evidence.log' "$S"
+
 exit $fail

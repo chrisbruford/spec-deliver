@@ -83,7 +83,7 @@ test: npm test
 lint: npm run lint
 ```
 
-It checks that new tests fail first, that tests, specs, CI and test runner config stay untouched between red and green, and that the verify commands pass. An agent with a shell could still forge the gate's local records, so consumer CI and human review remain the backstop.
+It checks that new tests fail first, that tests stay untouched between red and green, that protected paths such as specs, CI and test runner config stay untouched, and that the verify commands pass. A group whose tests cannot fail first, such as mutation-killing tests, can name its own proof with a `Gate:` command. An agent with a shell could still forge the gate's local records, so consumer CI and human review remain the backstop.
 
 ### Review
 

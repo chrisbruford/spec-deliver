@@ -17,7 +17,8 @@
     │   ├─ gate red: tests must fail
     │   ├─ implementer, fresh context
     │   ├─ reviewer reads the diff and the red log
-    │   └─ gate task: verify commands pass, tests and protected paths untouched,
+    │   └─ gate task: verify commands and the group's Gate: command pass,
+    │       tests and protected paths untouched,
     │       then ticks tasks.md and commits       (Green-For: <group>)
     │       └─ up to 2 forward-only retries, then stop and report
     │
@@ -43,8 +44,8 @@
 | `status` | Reports `none`, `red-unchecked`, `red` or `green` for a group. Fails on a `Green-For` that `task` did not write |
 | `red` | HEAD is the group's `Red-For` commit, it touches a test file, and the test command fails |
 | `test-fix` | HEAD is a `Test-Fix-For` commit that touches only tests, made after a checked red and before green |
-| `task` | Clean tree, HEAD is the reviewed commit (`--head`), protected paths intact, no test edits since red or the last test fix, a tracked code change since red, verify commands pass. Then ticks the group and commits `Green-For` |
-| `final` | All of the above across every group, every approved group delivered, group tests still present, every task ticked, verify commands pass |
+| `task` | Clean tree, HEAD is the reviewed commit (`--head`), protected paths intact, no test edits since red or the last test fix, a tracked code change since red, verify commands pass, the group's `Gate:` command passes. Then ticks the group and commits `Green-For` |
+| `final` | All of the above across every group, every approved group delivered, every `Gate:` command checked at its accepted commit, group tests still present, every task ticked, verify commands pass |
 
 The last line of output is always `GATE <mode> <PASS|FAIL|ERROR> ...`. Exit codes are 0 pass, 1 fail, 2 usage or configuration error.
 
@@ -52,7 +53,7 @@ The last line of output is always `GATE <mode> <PASS|FAIL|ERROR> ...`. Exit code
 
 The gate holds honest agents to account. It is not tamper-proof, because an agent with a shell can forge local records in `.git/spec-deliver/`. The real controls are the main session rerunning `gate final`, consumer CI, and human review of the PR.
 
-The gate catches edited tests, not vacuous ones. Only the group reviewer and human review catch a test that proves nothing.
+The gate catches edited tests, not vacuous ones. Only the group reviewer and human review catch a test that proves nothing, unless a `Gate:` command, such as a mutation run, proves the tests for that group.
 
 ## The Verify File
 
@@ -77,7 +78,7 @@ The defaults protect the verify file, CI workflows, Claude settings, stable spec
 
 Generated lock files, such as `packages.lock.json` or `pnpm-lock.yaml`, never count as test files, even inside a test project.
 
-The gate runs verify commands from the approved commit, but not the scripts they call. If a verify command runs a repo script, add that script to `protect:`, along with any manifest that defines the command, such as `package.json`.
+The gate runs verify commands and `Gate:` commands from the approved commit, but not the scripts or config files they read. If a command runs a repo script, add that script to `protect:`, along with any manifest that defines the command, such as `package.json`. Put pass conditions in the command itself, for example `--break-at 100`, rather than in a config file an agent can edit.
 
 ## Commit Trailers
 
@@ -98,14 +99,30 @@ Set in the `tasks.md` heading, for example `## 3. Update docs (no-test)`.
 | Kind | Red step | Test edits |
 | --- | --- | --- |
 | `code` (default) | Yes | Only in the test writer's commit, or a `Test-Fix-For` commit |
-| `no-test` | No | Not checked; verify commands still run. `gate final` rejects this kind unless the approved heading says so |
+| `no-test` | No | Allowed and not checked; verify commands still run. Use it for docs, wiring, config, and tests that pass on today's code, such as mutation-killing tests. `gate final` rejects this kind unless the approved heading says so |
 | `refactor` | No | None allowed, so behaviour is pinned by existing tests |
+
+A test that a human agrees is wrong is fixed with `Test-Fix-For` and `gate test-fix` in a `code` group only. A `no-test` or `refactor` group has no red step, so the fix is a plain commit, and the group is delivered again as `no-test`.
+
+### Gate command
+
+A `Gate: <command>` line under a group heading gives the group its own proof:
+
+```
+## 3. Kill auth mutants (no-test)
+
+Gate: scripts/mutation.sh --mutate "**/Auth/*.cs" --break-at 100
+
+- [ ] 3.1 Add tests until every mutant is killed
+```
+
+`gate task --change` reads the line from the approved `tasks.md`, runs it after the verify commands, and keeps its output in `spec-deliver/<group>.evidence.log` under `git rev-parse --absolute-git-dir`. `gate final` does not run it again, because it can be slow. It checks that the command passed at the commit the group was accepted at.
 
 ## Stacks
 
 - **Compiled languages**: a test referencing a missing symbol fails to compile, which says nothing about behaviour. The test writer commits signature stubs so the failure is an assertion.
 - **Pre-commit hooks**: hooks may reject failing tests, so `--no-verify` is allowed on red commits only.
-- **Slow suites**: `gate red` runs the full `test` command once per group. A gate call must finish inside the Bash tool's maximum timeout of 10 minutes, so point `test` at something faster if the suite takes longer.
+- **Slow suites**: `gate red` runs the full `test` command once per group, and `gate task` runs the verify commands and the group's `Gate:` command. A gate call must finish inside the Bash tool's maximum timeout of 10 minutes, so point `test` at something faster if the suite takes longer, and scope a `Gate:` command to the group's files.
 
 ## State File
 
@@ -132,7 +149,7 @@ Original idea text here
 
 Run `/spec-deliver:spec-deliver` again. It reads the state file and reconciles it with disk. Inside delivery, `gate status` reports each group's state, so finished groups are skipped and a group left at red continues with its implementer.
 
-The gate's records live in `.git/spec-deliver/`, so a delivery belongs to one clone. In a fresh clone, `gate final` reports `red-not-checked` because the proof that red failed is gone. Finish on the original clone, or have the engineer accept the gap in the evidence pack.
+The gate's records live in `.git/spec-deliver/`, so a delivery belongs to one clone. In a fresh clone, `gate final` reports `red-not-checked` or `evidence-not-checked` because the proof that red failed, or that a `Gate:` command passed, is gone. Finish on the original clone, or have the engineer accept the gap in the evidence pack.
 
 ## Done Means
 

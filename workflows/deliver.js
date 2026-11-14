@@ -112,6 +112,13 @@ const source = change
 
 const constraints = input.constraints ? `\n\nConstraints from the proposal and design:\n${input.constraints}` : ''
 
+// Claim only what the gate checks: it freezes tests after red, and for the whole of a refactor group.
+const TEST_RULES = {
+  code: 'Never edit test files. The test writer owns them, and the gate fails on any test edit after red.',
+  refactor: 'Never edit test files. The gate fails on any test edit in this group.',
+  'no-test': 'You may add and edit tests. The gate does not check test edits in this group.',
+}
+
 const groupBrief = group => `${source}
 
 You are working on group ${group.id}: ${group.title}.${group.detail ? `\n\n${group.detail}` : ''}${constraints}`
@@ -160,7 +167,7 @@ async function implement(group, startHead) {
     ? 'Make the failing tests for this group pass with the minimum real code. No placeholders or stubs.'
     : group.kind === 'refactor'
       ? 'Do this refactor without changing behaviour. Test files must not change.'
-      : 'Do this work. It has no tests of its own, and the repo verify commands must still pass.'
+      : 'Do this work. It has no red step, and the repo verify commands must still pass.'
   // Work with no tests of its own is mostly wiring and docs, which does not need the strongest model.
   const model = group.kind === 'code' ? {} : { model: 'sonnet' }
   let feedback = ''
@@ -171,8 +178,10 @@ async function implement(group, startHead) {
 
 ${goal}
 Search before you write: do not assume code does not exist.
-Never edit test files, specs, proposal.md, design.md, .config/spec-deliver/verify, CI config or test runner config. The gate fails on any of these.
-If a test is wrong, do not change it. Set blocked to "test-defect: " followed by the file and line, why the test is wrong, and the exact change you propose. A human decides.
+${TEST_RULES[group.kind]}
+Never edit specs, proposal.md, design.md or .config/spec-deliver/verify. The gate fails on these, and on any other path the verify file protects.
+Do not skip, delete or weaken a test, or change CI or test runner config, unless a task in this group says to.${change ? '\nIf a Gate: line follows the group heading in tasks.md, the gate runs that command too. Run it before you finish.' : ''}
+If an existing test is wrong and no task in this group says to change it, do not change it. Set blocked to "test-defect: " followed by the file and line, why the test is wrong, and the exact change you propose. A human decides.
 Fix forward with new commits. Never rewrite history: no reset, rebase or amend.
 Run the test command before you finish.
 
