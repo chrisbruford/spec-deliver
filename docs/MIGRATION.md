@@ -1,3 +1,14 @@
+# Migrating to 4.2
+
+4.2 fixes groups whose tests cannot fail first, found in a mutation-testing field run. In-flight deliveries resume without changes.
+
+| Before | After |
+| --- | --- |
+| The implementer prompt banned test edits in `no-test` groups, which the gate never checked | `no-test` groups may add and edit tests. Test-file rules now depend on the kind, and the prompt claims only what the gate checks |
+| A test-defect stop in a `no-test` or `refactor` group had no way through `gate test-fix` | Commit the agreed fix with no trailer, and deliver the group again as `no-test` |
+| A `no-test` group's proof, such as a mutation score, was only the implementer's claim | A `Gate: <command>` line under the group heading, which `gate task` runs and `gate final` checks |
+| The approval commit subject was `spec: approve <change>`, which Conventional Commits rejects | `chore(spec): approve <change>`. The gate still finds the approval by its trailer |
+
 # Migrating to 4.1
 
 4.1 changes the gate and the delivery workflow after the first field runs. In-flight deliveries resume without changes.

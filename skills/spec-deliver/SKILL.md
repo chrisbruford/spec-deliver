@@ -148,6 +148,11 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 
     Check that `tasks.md` uses numbered `## <n>. <title>` group headings. Mark a group `(no-test)` or `(refactor)` in its heading where that applies, for example `## 3. Update docs (no-test)`. Each group is delivered by fresh agents, so it must make sense on its own.
 
+    - `(no-test)` means no red step. Use it for docs, wiring and config, and for tests that pass on today's code, such as characterisation, mutation-killing or coverage tests. Its tasks may add and edit tests.
+    - `(refactor)` means no red step and no test edits. Its tasks must not name a test file.
+    - A code group whose test would already pass on today's code stops at `passes-at-red`. Plan that work as `(no-test)`.
+    - If a command proves a group with no red step, such as a mutation run, add a `Gate: <command>` line under its heading. The gate runs it, after the verify commands, before it accepts the group. Put the pass condition in the command, for example `--break-at 100`, because agents can edit the config files it reads. It must finish inside 10 minutes.
+
 12a. **Check the plan against the gate** before approval, because the rules freeze at approval. Run `spec-deliver-gate preflight` with every repo path that `tasks.md` and `design.md` say will change:
 
     ```bash
@@ -161,7 +166,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 
 13. **Present for review**. If the state file has a `source_sha`, run `git hash-object <source>` first. If it changed, read the source again, tell the user what changed and how it affects the spec, and update the spec before you ask.
 
-    Show the change name, tier, files to read (or the acceptance criteria for `--quick`), task groups, and the commands in `.config/spec-deliver/verify`. Those commands define done, and they are frozen at approval.
+    Show the change name, tier, files to read (or the acceptance criteria for `--quick`), task groups, the commands in `.config/spec-deliver/verify`, and any `Gate:` lines in `tasks.md`. Those commands define done, and they are frozen at approval.
 
 14. **Wait for approval**. Use AskUserQuestion: "Review the spec. Say **approved** to start delivery, or describe what to change." This is the main quality gate, so never skip it or infer approval.
 
@@ -173,14 +178,14 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 
     ```bash
     git add openspec/changes/<change-name> .config/spec-deliver/verify
-    git commit -m "spec: approve <change-name>" --trailer "Spec-Approved: <change-name>"
+    git commit -m "chore(spec): approve <change-name>" --trailer "Spec-Approved: <change-name>"
     ```
 
     Quick, keeping the criteria in the commit body:
 
     ```bash
     git add .config/spec-deliver/verify
-    git commit --allow-empty -m "spec: approve <change-name>" -m "<acceptance criteria>" --trailer "Spec-Approved: <change-name>"
+    git commit --allow-empty -m "chore(spec): approve <change-name>" -m "<acceptance criteria>" --trailer "Spec-Approved: <change-name>"
     ```
 
     Save `git rev-parse --short HEAD` as `approved_sha` in the state file. If `git status --porcelain` still shows other changes, stop and ask the user to commit or stash them, because the gate needs a clean tree.
@@ -202,7 +207,9 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 18. **When the workflow finishes**, read its result:
 
     - `complete`: continue. For `--signoff`, sign-off covers every group, including the last: show what the group changed and ask with AskUserQuestion, then repeat step 17 if groups remain.
-    - `stopped` with reason `test-defect`: the implementer says a test is wrong, and `detail` proposes a fix. Read the test and check the claim, then ask the user. If they agree, make only that test change, commit it and record it, then repeat step 17:
+    - `stopped` with reason `test-defect`: the implementer says a test is wrong, and `detail` proposes a fix. Read the test and check the claim, then ask the user. If they agree, make only that test change. Never rewrite history to change a test.
+
+      For a `code` group, commit the change and record it, then repeat step 17:
 
       ```bash
       git commit -m "test: <summary>" --trailer "Test-Fix-For: <group>"
@@ -212,7 +219,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
       spec-deliver-gate test-fix --approved <approved_sha> --group <group>
       ```
 
-      Never rewrite history to change a test.
+      For a `no-test` or `refactor` group, there is no red step, so `gate test-fix` refuses. Commit with `git commit -m "test: <summary>"` and no trailer. Then repeat step 17 with this group's `kind` set to `no-test`. For a refactor group, tell the user first that the gate then stops checking the group's test edits. `gate final` accepts this, because the approved heading allows no red step.
     - `stopped` for any other reason: report `reason`, `group` and `detail`, and ask the user how to proceed. Do not work around a stop. Rerunning resumes from commits. If the detail says the auto mode classifier denied a gate command, tell the user that `/auto-mode-setup` can describe `spec-deliver-gate` as this repo's local test gate.
     - `refused`: report the reason and stop.
 
@@ -260,7 +267,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
     <the final gate's last line, and the verify commands it ran>
 
     ## Red to green
-    <per group: tail of spec-deliver/<group>.red.log under `git rev-parse --absolute-git-dir`, showing why the tests failed first, or the no-test reason. List each Test-Fix-For commit with the reason the test was wrong>
+    <per group: tail of spec-deliver/<group>.red.log under `git rev-parse --absolute-git-dir`, showing why the tests failed first, or the no-test reason. For a group with a `Gate:` line, the tail of spec-deliver/<group>.evidence.log. List each Test-Fix-For commit, and each test fix in a no-test or refactor group, with the reason the test was wrong>
 
     ## Scenarios
     | Scenario | Test |

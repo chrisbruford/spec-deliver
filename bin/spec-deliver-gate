@@ -10,9 +10,10 @@
 #   spec-deliver-gate task     --approved SHA --group ID [--change NAME] [--head SHA] [--no-test REASON [--since SHA]]
 #   spec-deliver-gate final    --approved SHA [--change NAME]
 #
-# Rules come from .config/spec-deliver/verify as it stood at the approved commit,
-# so nothing committed during delivery can weaken them. preflight reads the
-# working-tree copy, because it runs before approval.
+# Rules come from .config/spec-deliver/verify, and each group's "Gate: <command>"
+# line in tasks.md, as they stood at the approved commit, so nothing committed
+# during delivery can weaken them. preflight reads the working-tree verify file,
+# because it runs before approval.
 #
 # The last line of output is always: GATE <mode> <PASS|FAIL|ERROR> ...
 # Exit codes: 0 pass, 1 fail, 2 usage or configuration error.
@@ -227,6 +228,15 @@ approved_groups() {
   '
 }
 
+# Prints the "Gate: <command>" line under the group's heading in the approved tasks.md, if any.
+group_gate() { # <group>
+  [ -n "$CHANGE" ] || return 0
+  git show "$APPROVED:openspec/changes/$CHANGE/tasks.md" 2>/dev/null | awk -v group="$1" '
+    /^## / { split(substr($0, 4), words, " "); id = words[1]; sub(/\.$/, "", id); inside = (id "" == group "") }
+    inside && /^Gate:/ { sub(/^Gate:[ \t]*/, ""); print; exit }
+  '
+}
+
 # A group may skip red only if the approved plan said so, or the repo has no tests at all.
 no_test_allowed() { # <group>
   if [ -z "$CHANGE" ]; then
@@ -346,6 +356,11 @@ case "$MODE" in
       require_implementation "$RED"
     fi
     run_verify
+    EVIDENCE=$(group_gate "$GROUP")
+    if [ -n "$EVIDENCE" ]; then
+      echo "--- gate: $EVIDENCE"
+      run_logged "$STATE/$GROUP.evidence.log" "$EVIDENCE" || fail evidence-failed
+    fi
     CHECKED=$(git rev-parse HEAD)
     if [ -n "$CHANGE" ]; then
       TASKS=openspec/changes/$CHANGE/tasks.md
@@ -363,6 +378,7 @@ No-Test: $NO_TEST_REASON"
     fi
     # Written after the commit, so a failed commit leaves no record behind.
     echo "$CHECKED" >"$STATE/$GROUP.task"
+    [ -z "$EVIDENCE" ] || echo "$CHECKED" >"$STATE/$GROUP.evidence"
     finish 0 PASS "checked=$(git rev-parse --short "$CHECKED")"
     ;;
 
@@ -404,7 +420,11 @@ No-Test: $NO_TEST_REASON"
       # tasks.md is not frozen, so hold delivery to the plan as approved.
       git cat-file -e "$APPROVED:$TASKS" 2>/dev/null || error no-approved-tasks
       while read -r group _; do
-        [ -n "$(trailer_commit Green-For "$group")" ] || fail "group-not-delivered group=$group"
+        green=$(trailer_commit Green-For "$group")
+        [ -n "$green" ] || fail "group-not-delivered group=$group"
+        # A Gate: command is not run again here, because it can be slow. Its record must match the accepted commit.
+        [ -z "$(group_gate "$group")" ] || [ "$(cat "$STATE/$group.evidence" 2>/dev/null)" = "$(git rev-parse "$green^")" ] ||
+          fail "evidence-not-checked group=$group"
       done < <(approved_groups)
     fi
 

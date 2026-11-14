@@ -579,6 +579,33 @@ expect 0 'PASS' 'allow lets the plan edit one protected path' -- task --approved
 echo x > .github/workflows/other.yml; commit -m more
 expect 1 'protected-path' 'allow does not open other protected paths' -- task --approved "$APPROVED" --group 2 --no-test wiring
 
+# A group with no red step proves itself with its own command, frozen at approval. Field run: mutation tests.
+gate_repo() { # <name> <command>
+  node_repo "$1"
+  printf '## 1. Multiply\n\n- [ ] 1.1 Add multiply\n\n## 2. Kill mutants (no-test)\n\nGate: %s\n\n- [ ] 2.1 Add tests\n' "$2" > openspec/changes/c/tasks.md
+  commit -m tasks
+  git commit -q --no-verify --allow-empty -m approve -m 'Spec-Approved: c'
+  APPROVED=$(git rev-parse HEAD)
+}
+gate_repo gate-cmd 'test -f proof && echo proved'
+sed -i.bak 's/^Gate: .*/Gate: true/' openspec/changes/c/tasks.md && rm openspec/changes/c/tasks.md.bak; commit -m 'weaken gate'
+expect 1 'evidence-failed' 'a failing Gate: command stops acceptance, even when edited after approval' -- task --approved "$APPROVED" --group 2 --change c --no-test mutants
+expect 0 'PASS' 'a Gate: command runs only for its own group' -- task --approved "$APPROVED" --group 1 --change c --no-test other
+echo x > proof; commit -m proof
+expect 0 'PASS' 'a passing Gate: command allows acceptance' -- task --approved "$APPROVED" --group 2 --change c --no-test mutants
+grep -q proved "$(git rev-parse --absolute-git-dir)/spec-deliver/2.evidence.log" && ok 'the Gate: command keeps its log' || bad 'the Gate: command keeps its log'
+
+gate_repo gate-final 'test -f proof'
+green_group; echo x > proof; commit -m proof
+"$GATE" task --approved "$APPROVED" --group 2 --change c --no-test mutants >/dev/null
+expect 0 'PASS' 'final passes when each Gate: command was checked' -- final --approved "$APPROVED" --change c
+
+gate_repo gate-skip 'test -f proof'
+green_group
+"$GATE" task --approved "$APPROVED" --group 2 --no-test mutants >/dev/null
+sed -i.bak 's/- \[ \] 2.1/- [x] 2.1/' openspec/changes/c/tasks.md && rm openspec/changes/c/tasks.md.bak; commit -m tick
+expect 1 'evidence-not-checked' 'tampering: a group cannot skip its Gate: command' -- final --approved "$APPROVED" --change c
+
 node_repo bad-allow
 approve_verify 'test: node --test' 'allow: ('
 expect 2 'bad-pattern' 'an invalid allow pattern is an error, not a pass' -- baseline --approved "$APPROVED"

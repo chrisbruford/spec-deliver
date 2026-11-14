@@ -258,6 +258,29 @@ test('refactor groups pin the starting commit', async () => {
   assert.match(calls.find(c => modeOf(c) === 'task').prompt, /--no-test refactor-group --since aaa1111/)
 })
 
+// Field run add-mutation-tests: no-test groups that add tests stopped as test-defect.
+test('implementer test rules follow the group kind', async () => {
+  const groups = [{ id: '1', title: 'A', kind: 'code' }, { id: '2', title: 'B', kind: 'refactor' }, { id: '3', title: 'C', kind: 'no-test' }]
+  const { calls } = await run({ ...base, groups }, world())
+  const [code, refactor, noTest] = calls.filter(c => c.label.startsWith('implement')).map(c => c.prompt)
+  assert.match(code, /never edit test files/i)
+  assert.match(refactor, /never edit test files/i)
+  assert.doesNotMatch(noTest, /never edit test files/i)
+  assert.match(noTest, /may add and edit tests/i)
+})
+
+test('a change a task names is in scope, and the prompt claims only what the gate checks', async () => {
+  const { calls } = await run({ ...base, groups: [{ id: '2', title: 'Docs', kind: 'no-test' }] }, world())
+  const prompt = calls.find(c => c.label.startsWith('implement')).prompt
+  assert.match(prompt, /unless a task in this group says to/i)
+  assert.doesNotMatch(prompt, /test runner config\. The gate fails/i)
+})
+
+test('the implementer runs the group Gate: command before the gate does', async () => {
+  const { calls } = await run(base, world())
+  assert.match(calls.find(c => c.label.startsWith('implement')).prompt, /Gate: line/)
+})
+
 test('quick deliveries work from a brief, without a change', async () => {
   const { result, calls } = await run({ approvedSha: SHA, brief: 'mul multiplies', groups: [{ id: '1', title: 'Fix', kind: 'code' }] }, world())
   assert.equal(result.status, 'complete')
