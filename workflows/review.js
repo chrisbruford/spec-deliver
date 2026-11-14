@@ -10,6 +10,9 @@ export const meta = {
 }
 
 const SAFE_REF = /^[A-Za-z0-9._\/-]+$/
+const SAFE_CHANGE = /^[A-Za-z0-9._-]+$/
+// Lenses that judge whether the code does what was asked, so they need the spec.
+const SPEC_LENSES = ['qa', 'adversarial']
 const CORE_LENSES = ['qa', 'adversarial', 'security', 'tests']
 const OPTIONAL_LENSES = {
   concurrency: 'async work, threads, locks, queues, retries, shared state, or ordering',
@@ -26,7 +29,8 @@ const files = input.files
 // The caller passes ponytail only when the ponytail:ponytail-review skill is installed.
 if (input.ponytail) OPTIONAL_LENSES.ponytail = 'new code, abstractions, options or dependencies where a simpler version may exist'
 
-if (!SAFE_REF.test(input.base || '') || !Array.isArray(files) || files.length === 0) {
+const badChange = input.change !== undefined && input.change !== null && !SAFE_CHANGE.test(input.change)
+if (!SAFE_REF.test(input.base || '') || !Array.isArray(files) || files.length === 0 || badChange) {
   return { status: 'refused', reason: 'needs a valid base and a list of changed files. Start through /spec-deliver:parallel-review.' }
 }
 
@@ -140,7 +144,10 @@ const runLens = lens => {
     return agent(ponytailPrompt, { label: 'lens ponytail', agentType: 'general-purpose', schema: FINDINGS_SCHEMA, phase: 'Review' })
   }
   const suiteNote = lens === 'tests' ? '\n\nRun the test suite and put the result in testSuite.' : ''
-  return agent(`${reviewPrompt}${suiteNote}`, {
+  const specNote = input.change && SPEC_LENSES.includes(lens)
+    ? `\n\nRead the approved change in openspec/changes/${input.change}/: proposal.md, design.md and specs/. Report as findings any scenario the code does not meet, any departure from design.md, and any change that does not serve the proposal's goal.`
+    : ''
+  return agent(`${reviewPrompt}${suiteNote}${specNote}`, {
     label: `lens ${lens}`,
     agentType: `spec-deliver:${AGENTS[lens] || `${lens}-reviewer`}`,
     schema: FINDINGS_SCHEMA,

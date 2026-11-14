@@ -12,6 +12,7 @@ const base = {
 
 const pass = (mode, extra = '') => ({ exit: 0, resultLine: `GATE ${mode} PASS group=1 head=def5678 ${extra}`.trim(), tail: '' })
 const failed = (mode, reason) => ({ exit: 1, resultLine: `GATE ${mode} FAIL group=1 head=def5678 reason=${reason}`, tail: 'output' })
+const clean = { scenarios: [{ scenario: 'mul multiplies', verdict: 'met', evidence: 'mul.test.js:3' }], blocking: [], escalate: [], notes: [] }
 const modeOf = call => /spec-deliver-gate (\w+)/.exec(call.prompt)?.[1]
 
 // A fake delivery where everything succeeds, with per-call overrides.
@@ -25,6 +26,7 @@ const world = (overrides = {}) => call => {
   if (label.startsWith('test-writer')) return overrides.writer ? overrides.writer(call) : { head: 'def5678', blocked: '' }
   if (label.startsWith('implement')) return overrides.implementer ? overrides.implementer(call) : { head: 'def5678', blocked: '' }
   if (label.startsWith('review')) return overrides.reviewer ? overrides.reviewer(call) : { blocking: [], notes: [] }
+  if (label === 'conformance') return overrides.conformance ? overrides.conformance(call) : clean
   throw new Error(`unexpected agent ${label}`)
 }
 
@@ -60,7 +62,7 @@ test('delivers a code group in order', async () => {
   const { result, calls } = await run(base, world())
   assert.equal(result.status, 'complete')
   assert.deepEqual(result.delivered, ['1'])
-  assert.deepEqual(labels(calls), ['gate:status', 'gate:baseline', 'test-writer', 'gate:red', 'implement', 'review', 'gate:task'])
+  assert.deepEqual(labels(calls), ['gate:status', 'gate:baseline', 'test-writer', 'gate:red', 'implement', 'review', 'gate:task', 'conformance'])
 })
 
 test('gate commands carry approval, group and change', async () => {
@@ -74,11 +76,11 @@ test('skips groups already green', async () => {
   const { result, calls } = await run(base, world({ status: () => pass('status', 'state=green base=aaa1111') }))
   assert.equal(result.status, 'complete')
   assert.deepEqual(result.skipped, ['1'])
-  assert.deepEqual(labels(calls), ['gate:status'])
+  assert.deepEqual(labels(calls), ['gate:status', 'conformance'])
 })
 
 test('a null agent result fails closed', async () => {
-  for (const point of ['status', 'baseline', 'red', 'task', 'writer', 'implementer', 'reviewer']) {
+  for (const point of ['status', 'baseline', 'red', 'task', 'writer', 'implementer', 'reviewer', 'conformance']) {
     const { result } = await run(base, world({ [point]: () => null }))
     assert.equal(result.status, 'stopped', point)
     assert.match(result.reason, /agent-failed/, point)
@@ -217,12 +219,12 @@ test('the token cap stops the run', async () => {
 test('resuming at a checked red skips the test writer and baseline', async () => {
   const { result, calls } = await run(base, world({ status: () => pass('status', 'state=red base=aaa1111') }))
   assert.equal(result.status, 'complete')
-  assert.deepEqual(labels(calls), ['gate:status', 'implement', 'review', 'gate:task'])
+  assert.deepEqual(labels(calls), ['gate:status', 'implement', 'review', 'gate:task', 'conformance'])
 })
 
 test('resuming at an unchecked red reruns the red check', async () => {
   const { calls } = await run(base, world({ status: () => pass('status', 'state=red-unchecked base=aaa1111') }))
-  assert.deepEqual(labels(calls), ['gate:status', 'gate:red', 'implement', 'review', 'gate:task'])
+  assert.deepEqual(labels(calls), ['gate:status', 'gate:red', 'implement', 'review', 'gate:task', 'conformance'])
 })
 
 test('no-test groups skip red and pass the gate with a reason', async () => {
@@ -313,4 +315,88 @@ test('groups run in order and a stop leaves later groups untouched', async () =>
   assert.equal(result.status, 'stopped')
   assert.deepEqual(result.delivered, [])
   assert.equal(calls.some(c => /--group 2/.test(c.prompt)), false)
+})
+
+test('the group reviewer checks the work so far against the whole change', async () => {
+  const { calls } = await run(base, world())
+  const prompt = calls.find(c => c.label.startsWith('review')).prompt
+  assert.match(prompt, /git diff abc1234\.\.HEAD/)
+  assert.match(prompt, /design\.md/)
+  assert.match(prompt, /earlier group/i)
+})
+
+test('conformance reviews the whole delivery against the whole change', async () => {
+  const { calls } = await run(base, world())
+  const review = calls.find(c => c.label === 'conformance')
+  assert.equal(review.agentType, 'spec-deliver:qa-code-reviewer')
+  assert.match(review.prompt, /openspec\/changes\/add-mul\/: proposal\.md, design\.md, tasks\.md and specs\//)
+  assert.match(review.prompt, /git diff abc1234\.\.HEAD/)
+  assert.match(review.prompt, /every scenario/i)
+})
+
+test('quick deliveries are checked against the brief', async () => {
+  const { calls } = await run({ approvedSha: SHA, brief: 'mul multiplies', groups: [{ id: '1', title: 'Fix', kind: 'code' }] }, world())
+  assert.match(calls.find(c => c.label === 'conformance').prompt, /mul multiplies/)
+})
+
+test('a complete result carries the scenario verdicts', async () => {
+  const { result } = await run(base, world())
+  assert.equal(result.status, 'complete')
+  assert.deepEqual(result.conformance, clean.scenarios)
+})
+
+test('conformance findings are fixed test-first in a fix group, then reviewed again', async () => {
+  let rounds = 0
+  const conformance = () => (++rounds === 1 ? { ...clean, blocking: ['zero times anything is not zero'] } : clean)
+  const { result, calls } = await run(base, world({ conformance }))
+  assert.equal(result.status, 'complete')
+  assert.deepEqual(result.delivered, ['1', 'conf-def5678'])
+  assert.deepEqual(labels(calls).slice(7), ['conformance', 'gate:status', 'test-writer', 'gate:red', 'implement', 'review', 'gate:task', 'conformance'])
+  assert.match(calls.find(c => c.label === 'test-writer conf-def5678').prompt, /zero times anything is not zero/)
+  // A fix group is not in the approved tasks.md, so it ticks nothing.
+  assert.doesNotMatch(calls.filter(c => modeOf(c) === 'task').at(-1).prompt, /--change/)
+})
+
+test('conformance that never clears stops after the fix rounds', async () => {
+  const { result, calls } = await run(base, world({ conformance: () => ({ ...clean, blocking: ['still wrong'] }) }))
+  assert.equal(result.status, 'stopped')
+  assert.equal(result.reason, 'conformance-failed')
+  assert.match(result.detail, /still wrong/)
+  assert.equal(calls.filter(c => c.label === 'conformance').length, 3)
+})
+
+test('findings no test can prove stop for a human, with no fix round', async () => {
+  const conformance = () => ({ ...clean, blocking: ['also this'], escalate: ['the cache layer design.md asks for is missing'] })
+  const { result, calls } = await run(base, world({ conformance }))
+  assert.equal(result.status, 'stopped')
+  assert.equal(result.reason, 'conformance-escalate')
+  assert.match(result.detail, /cache layer/)
+  assert.equal(calls.filter(c => c.label.startsWith('test-writer')).length, 1)
+})
+
+test('a stop inside a fix group returns the group, so a rerun can resume it', async () => {
+  let reds = 0
+  const { result } = await run(base, world({
+    conformance: () => ({ ...clean, blocking: ['zero case'] }),
+    red: () => (++reds === 1 ? pass('red') : failed('red', 'passes-at-red')),
+  }))
+  assert.equal(result.status, 'stopped')
+  assert.equal(result.group, 'conf-def5678')
+  assert.deepEqual(result.fixGroup, { id: 'conf-def5678', title: 'Conformance fixes', kind: 'code', qa: true, detail: 'Conformance findings:\n- zero case' })
+})
+
+test('a head that is not a sha never becomes a fix group id', async () => {
+  const { result, calls } = await run(base, world({
+    conformance: () => ({ ...clean, blocking: ['zero case'] }),
+    task: () => ({ exit: 0, resultLine: 'GATE task PASS group=1 head=$(id)', tail: '' }),
+  }))
+  assert.equal(result.status, 'stopped')
+  assert.equal(calls.some(c => c.prompt.includes('$(id)')), false)
+})
+
+// With --signoff each run delivers one group, so later groups' scenarios are not missing yet.
+test('a run that is not the last can skip conformance', async () => {
+  const { result, calls } = await run({ ...base, conformance: false }, world())
+  assert.equal(result.status, 'complete')
+  assert.equal(calls.some(c => c.label === 'conformance'), false)
 })

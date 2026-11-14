@@ -1,10 +1,11 @@
 export const meta = {
   name: 'deliver',
-  description: 'Deliver an approved change group by group: failing tests, implementation, gate, review',
+  description: 'Deliver an approved change group by group: failing tests, implementation, gate, review, then a conformance review of the whole delivery',
   whenToUse: 'Started by /spec-deliver:spec-deliver after human approval. Refuses to run without an approved commit.',
   phases: [
     { title: 'Preflight', detail: 'check gate state and a green baseline' },
     { title: 'Deliver', detail: 'per group: red, green, review, gate' },
+    { title: 'Conformance', detail: 'the whole delivery against the whole change, fixed test-first' },
   ],
 }
 
@@ -38,7 +39,8 @@ if (refusal) {
 
 const approved = input.approvedSha
 const change = input.change
-const maxAgents = input.maxAgents ?? groups.length * 15 + 5
+// Each conformance fix round is one more group, plus the review itself.
+const maxAgents = input.maxAgents ?? (groups.length + MAX_RETRIES) * 15 + MAX_RETRIES + 6
 const maxOutputTokens = input.maxOutputTokens ?? null
 
 const GATE_SCHEMA = {
@@ -67,9 +69,32 @@ const REVIEW_SCHEMA = {
   },
 }
 
+const CONFORMANCE_SCHEMA = {
+  type: 'object',
+  required: ['scenarios', 'blocking', 'escalate', 'notes'],
+  properties: {
+    scenarios: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['scenario', 'verdict', 'evidence'],
+        properties: {
+          scenario: { type: 'string' },
+          verdict: { type: 'string', enum: ['met', 'partial', 'not-met'] },
+          evidence: { type: 'string' },
+        },
+      },
+    },
+    blocking: { type: 'array', items: { type: 'string' } },
+    escalate: { type: 'array', items: { type: 'string' } },
+    notes: { type: 'array', items: { type: 'string' } },
+  },
+}
+
 const stop = (reason, group, detail = '') => ({ stopped: true, reason, group, detail })
 
 let spawned = 0
+let lastHead = ''
 
 async function run(prompt, opts) {
   if (spawned >= maxAgents) throw stop('agent-cap', null, `reached ${maxAgents} agents`)
@@ -94,6 +119,7 @@ async function gate(mode, group, extra = '') {
   })
   const line = report.resultLine || ''
   const ok = report.exit === 0 && line.startsWith(`GATE ${mode} PASS`)
+  lastHead = /head=(\S+)/.exec(line)?.[1] ?? lastHead
   return { ok, line, tail: report.tail || '' }
 }
 
@@ -202,7 +228,8 @@ Return the short HEAD sha. Set blocked to a reason if you cannot proceed, otherw
 
 Review the diff ${startHead}..HEAD for this group. This is one independent check before the group is accepted, not the full review.
 Run git rev-parse --absolute-git-dir, then read spec-deliver/${group.id}.red.log under that directory if it exists, and confirm the tests failed for the right reason.
-Report as blocking only what must change before acceptance: a spec scenario with no real test, a vacuous or hardcoded test, code built only to satisfy a test, wrong behaviour, or a weakened test command in a manifest such as package.json.
+Then run git diff ${approved}..HEAD to see this group in the context of the whole delivery so far.
+Report as blocking only what must change before acceptance: a spec scenario with no real test, a test that proves less than its scenario, a vacuous or hardcoded test, code built only to satisfy a test, wrong behaviour, a weakened test command in a manifest such as package.json, a departure from design.md or a constraint, behaviour an earlier group delivered that this group breaks, or work outside the change's scope that no task asks for.
 Do not report style.
 Read files with the Read tool. Run one command per Bash call, with no pipes or chaining, because allow rules match single commands.`,
       { label: `review ${group.id}`, agentType: 'spec-deliver:qa-code-reviewer', schema: REVIEW_SCHEMA, phase: 'Deliver' },
@@ -225,46 +252,92 @@ const delivered = []
 const skipped = []
 const notes = []
 let baselineChecked = false
+let fixGroup = null
+
+async function deliverGroup(group) {
+  phase('Preflight')
+  const status = await gate('status', group)
+  const state = /state=(\S+)/.exec(status.line)?.[1]
+  if (!status.ok || !state) throw stop('status-failed', group.id, status.line)
+  if (state === 'green') {
+    skipped.push(group.id)
+    return
+  }
+
+  // A resumed group is red on purpose, so only a fresh start can demand a green baseline.
+  if (!SAFE_SHA.test(baseOf(status.line))) throw stop('status-failed', group.id, status.line)
+  if (state === 'none' && !baselineChecked) {
+    const baseline = await gate('baseline')
+    if (!baseline.ok) throw stop('baseline-failed', group.id, `${baseline.line}\n${baseline.tail}`)
+  }
+  baselineChecked = true
+
+  phase('Deliver')
+  // The gate works this out from commits, so a resumed group keeps its real starting point.
+  const startHead = baseOf(status.line)
+  if (group.kind === 'code') {
+    if (state === 'none') {
+      await writeTests(group)
+    } else if (state === 'red-unchecked') {
+      const red = await gate('red', group)
+      if (!red.ok) throw stop('red-failed', group.id, `${red.line}\n${red.tail}`)
+    }
+  }
+
+  const reviewNotes = await implement(group, startHead)
+  notes.push(...reviewNotes.map(note => `group ${group.id}: ${note}`))
+  delivered.push(group.id)
+  log(`Group ${group.id} accepted`)
+}
+
+// Each group was checked on its own. This is the one check of the whole delivery against the whole change.
+async function conformance() {
+  phase('Conformance')
+  return run(
+    `${source}${constraints}
+
+Review the whole delivery against the whole approved change. Run git diff ${approved}..HEAD, and read the tests and the code it touches.
+- For every scenario in specs/ (or every acceptance criterion in the brief), give a verdict: met, partial or not-met. Evidence names the code and the test that prove it, and says whether the test proves the whole scenario.
+- Check that the code follows design.md and the constraints, and that the delivery achieves the goal in proposal.md, not only the tasks. Check that groups work together.
+- Report out-of-scope changes and requirements that no test covers.
+
+Put each finding that must change in exactly one list:
+- blocking: wrong or missing behaviour that a new failing test can prove. Say what the test must prove.
+- escalate: anything a test cannot prove, such as a departure from design.md, a requirement no test can express, or a spec that is ambiguous or contradicts itself. A human decides these.
+Do not report style.
+Read files with the Read tool. Run one command per Bash call, with no pipes or chaining, because allow rules match single commands.`,
+    { label: 'conformance', agentType: 'spec-deliver:qa-code-reviewer', schema: CONFORMANCE_SCHEMA, phase: 'Conformance' },
+  )
+}
+
+let scenarios = []
 
 try {
-  for (const group of groups) {
-    phase('Preflight')
-    const status = await gate('status', group)
-    const state = /state=(\S+)/.exec(status.line)?.[1]
-    if (!status.ok || !state) throw stop('status-failed', group.id, status.line)
-    if (state === 'green') {
-      skipped.push(group.id)
-      continue
-    }
+  for (const group of groups) await deliverGroup(group)
 
-    // A resumed group is red on purpose, so only a fresh start can demand a green baseline.
-    if (!SAFE_SHA.test(baseOf(status.line))) throw stop('status-failed', group.id, status.line)
-    if (state === 'none' && !baselineChecked) {
-      const baseline = await gate('baseline')
-      if (!baseline.ok) throw stop('baseline-failed', group.id, `${baseline.line}\n${baseline.tail}`)
-    }
-    baselineChecked = true
+  for (let round = 0; input.conformance !== false; round += 1) {
+    const review = await conformance()
+    scenarios = review.scenarios
+    notes.push(...review.notes.map(note => `conformance: ${note}`))
+    if (review.escalate.length > 0) throw stop('conformance-escalate', null, `- ${review.escalate.join('\n- ')}`)
+    if (review.blocking.length === 0) break
+    if (round === MAX_RETRIES) throw stop('conformance-failed', null, `- ${review.blocking.join('\n- ')}`)
 
-    phase('Deliver')
-    // The gate works this out from commits, so a resumed group keeps its real starting point.
-    const startHead = baseOf(status.line)
-    if (group.kind === 'code') {
-      if (state === 'none') {
-        await writeTests(group)
-      } else if (state === 'red-unchecked') {
-        const red = await gate('red', group)
-        if (!red.ok) throw stop('red-failed', group.id, `${red.line}\n${red.tail}`)
-      }
+    // The id comes from HEAD, so a rerun never mistakes a new fix for a delivered one.
+    if (!SAFE_SHA.test(lastHead)) throw stop('status-failed', null, 'no commit sha for the conformance fix group')
+    fixGroup = {
+      id: `conf-${lastHead}`,
+      title: 'Conformance fixes',
+      kind: 'code',
+      qa: true,
+      detail: `Conformance findings:\n- ${review.blocking.join('\n- ')}`,
     }
-
-    const reviewNotes = await implement(group, startHead)
-    notes.push(...reviewNotes.map(note => `group ${group.id}: ${note}`))
-    delivered.push(group.id)
-    log(`Group ${group.id} accepted`)
+    await deliverGroup(fixGroup)
   }
 } catch (failure) {
   if (!failure || !failure.stopped) throw failure
-  return { status: 'stopped', reason: failure.reason, group: failure.group, detail: failure.detail, delivered, skipped, notes, agents: spawned }
+  const resume = fixGroup && failure.group === fixGroup.id ? { fixGroup } : {}
+  return { status: 'stopped', reason: failure.reason, group: failure.group, detail: failure.detail, delivered, skipped, notes, agents: spawned, ...resume }
 }
 
-return { status: 'complete', delivered, skipped, notes, agents: spawned }
+return { status: 'complete', delivered, skipped, notes, conformance: scenarios, agents: spawned }

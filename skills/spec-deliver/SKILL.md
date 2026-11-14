@@ -199,6 +199,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
     - `groups`: one `{id, title, kind}` per group in `tasks.md` that still has unticked tasks. `id` is the heading number, and `kind` is `code`, `no-test` or `refactor`. For `--quick`, use `[{id: "1", title: "<summary>", kind: "code"}]`. If the verify file has no `test` line, there is nothing to run red against, so use `kind: "no-test"`.
     - `constraints`: anything the proposal or design says must not change, plus resolved decisions.
     - `maxOutputTokens`: the `--max-output-tokens` value, if given.
+    - `conformance: false` for a `--signoff` run that is not the last group, because later groups' scenarios are not delivered yet. Omit it otherwise.
 
 17. **Start delivery**. Call the Workflow tool with name `spec-deliver:deliver` and those `args`. For `--signoff`, pass one group per run.
 
@@ -206,7 +207,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 
 18. **When the workflow finishes**, read its result:
 
-    - `complete`: continue. For `--signoff`, sign-off covers every group, including the last: show what the group changed and ask with AskUserQuestion, then repeat step 17 if groups remain.
+    - `complete`: continue. Keep the result's `conformance` verdicts for Phase 6. For `--signoff`, sign-off covers every group, including the last: show what the group changed and ask with AskUserQuestion, then repeat step 17 if groups remain.
     - `stopped` with reason `test-defect`: the implementer says a test is wrong, and `detail` proposes a fix. Read the test and check the claim, then ask the user. If they agree, make only that test change. Never rewrite history to change a test.
 
       For a `code` group, commit the change and record it, then repeat step 17:
@@ -220,6 +221,9 @@ If the request touches auth, payments, personal data or migrations and `--high-r
       ```
 
       For a `no-test` or `refactor` group, there is no red step, so `gate test-fix` refuses. Commit with `git commit -m "test: <summary>"` and no trailer. Then repeat step 17 with this group's `kind` set to `no-test`. For a refactor group, tell the user first that the gate then stops checking the group's test edits. `gate final` accepts this, because the approved heading allows no red step.
+    - `stopped` with reason `conformance-escalate`: the conformance review found something no test can prove, such as a departure from `design.md` or an ambiguous spec. Show `detail` and ask the user to fix it in this session, amend the spec and approve it again, or accept it as a gap in the evidence pack. Repeat step 17 after a fix, so the conformance review runs again.
+    - `stopped` with reason `conformance-failed`: the fix rounds did not clear the conformance findings in `detail`. Report them and ask the user how to proceed.
+    - `stopped` with a `fixGroup` in the result: the stop happened inside a conformance fix group. Handle the reason as above, then add `fixGroup` to `groups` when you repeat step 17, so the group resumes from its commits.
     - `stopped` for any other reason: report `reason`, `group` and `detail`, and ask the user how to proceed. Do not work around a stop. Rerunning resumes from commits. If the detail says the auto mode classifier denied a gate command, tell the user that `/auto-mode-setup` can describe `spec-deliver-gate` as this repo's local test gate.
     - `refused`: report the reason and stop.
 
@@ -253,7 +257,7 @@ If the request touches auth, payments, personal data or migrations and `--high-r
 
     Omit `--change` for `--quick`. If the last line is not `GATE final PASS`, report it and stop. Never report a delivery as done without this pass. If the engineer decides to proceed anyway, record that decision in the evidence pack and the PR.
 
-23. **Map scenarios to tests**. For each `#### Scenario:` in the change's specs (or each acceptance criterion), name the test that proves it. A scenario with no test is a gap: report it and ask the engineer whether to deliver it or accept the gap.
+23. **Map scenarios to tests**. Use the `conformance` verdicts from the last deliver run, including any QA run in Phase 5. Check that every `#### Scenario:` in the change's specs (or each acceptance criterion) has a verdict. A scenario that is `partial`, `not-met` or missing is a gap: report it and ask the engineer whether to deliver it or accept the gap.
 
 24. **Write the evidence pack** to `openspec/changes/<change-name>/evidence.md`, and commit it. For `--quick`, put this in the PR body instead.
 
@@ -270,8 +274,8 @@ If the request touches auth, payments, personal data or migrations and `--high-r
     <per group: tail of spec-deliver/<group>.red.log under `git rev-parse --absolute-git-dir`, showing why the tests failed first, or the no-test reason. For a group with a `Gate:` line, the tail of spec-deliver/<group>.evidence.log. List each Test-Fix-For commit, and each test fix in a no-test or refactor group, with the reason the test was wrong>
 
     ## Scenarios
-    | Scenario | Test |
-    | --- | --- |
+    | Scenario | Verdict | Evidence |
+    | --- | --- | --- |
 
     ## Review
     <verdict, lenses run and skipped, finding counts, path to the report>

@@ -217,3 +217,16 @@ test('a clean diff needs no verification', async () => {
   assert.equal(calls.some(c => c.label.startsWith('verify')), false)
   assert.equal(result.verdict, 'CLEAN')
 })
+
+test('with a change, the qa and adversarial lenses review against the spec', async () => {
+  const { calls } = await run({ ...base, change: 'add-mul' }, world())
+  const prompt = lens => calls.find(c => c.label === `lens ${lens}`).prompt
+  for (const lens of ['qa', 'adversarial']) assert.match(prompt(lens), /openspec\/changes\/add-mul\//)
+  assert.doesNotMatch(prompt('security'), /openspec\/changes/)
+})
+
+test('refuses a change name that would reach a shell command', async () => {
+  const { result, calls } = await run({ ...base, change: 'x$(id)' }, world())
+  assert.equal(result.status, 'refused')
+  assert.equal(calls.length, 0)
+})

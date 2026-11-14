@@ -9,7 +9,7 @@ You approve what gets built. Agents build it group by group, and a deterministic
 1. **Explores** the idea with you
 2. **Writes a short spec** with OpenSpec
 3. **Pauses for your approval**, recorded in a commit that freezes the rules
-4. **Delivers each task group** in fresh context: failing tests first, then the code, then the gate, then a review
+4. **Delivers each task group** in fresh context: failing tests first, then the code, then a review, then the gate. A conformance review then checks the whole delivery against the whole spec, design and goal, and sends testable gaps back through the same loop
 5. **Reviews** through specialist lenses, checking each finding against the code
 6. **Runs the final gate** and writes an evidence pack
 7. **Archives the spec and opens a PR** for a human to review and merge
@@ -108,6 +108,7 @@ Every stage covers a model weakness. Re-test this list on each model release, an
 | Gate on test edits | Agents edit tests to pass | Reward hacking stops showing up in evals |
 | Fresh context per group | Long sessions drift, and compaction can drop specs | Long-session quality matches fresh context in evals |
 | Group reviewer | Green tests can still be vacuous | Evals show it finds nothing the final review misses |
+| Conformance review | Each check sees one group, so drift from the spec, design or goal goes unseen | Evals show the group reviewer and lenses catch the same gaps |
 | Finding verification | Reviewers report plausible false positives | False positive rates fall low enough to skip it |
 | Multiple lenses | One reviewer misses whole categories | One strong reviewer matches them in evals |
 
