@@ -16,13 +16,20 @@
     │   ├─ test-writer commits failing tests     (Red-For: <group>)
     │   ├─ gate red: tests must fail
     │   ├─ implementer, fresh context
-    │   ├─ reviewer reads the diff and the red log
+    │   ├─ reviewer reads the diff, the red log, and the work so far
+    │   │   against design.md, constraints and earlier groups
     │   └─ gate task: verify commands and the group's Gate: command pass,
     │       tests and protected paths untouched,
     │       then ticks tasks.md and commits       (Green-For: <group>)
     │       └─ up to 2 forward-only retries, then stop and report
+    │   └─ conformance: the whole diff since approval against the whole change
+    │       ├─ a verdict per scenario, design, constraints, the proposal's goal
+    │       ├─ testable findings become a conf-<sha> fix group, then review again
+    │       │   (up to 2 fix rounds, then stop and report)
+    │       └─ findings no test can prove stop for a human
     │
     ├─ 5 QA: workflow spec-deliver:review
+    │   ├─ qa and adversarial lenses read the change
     │   ├─ lenses chosen by diff, verify each finding, dedup, rank, report file
     │   └─ testable fixes go back through deliver as qa<n> groups
     ├─ 6 VERIFY: gate final from the main session, then the evidence pack
@@ -154,6 +161,6 @@ The gate's records live in `.git/spec-deliver/`, so a delivery belongs to one cl
 ## Done Means
 
 1. `gate final` passes, run from the main session
-2. Every spec scenario maps to a named test, or the gap is accepted in the evidence pack
+2. The conformance review marks every spec scenario met, or the gap is accepted in the evidence pack
 3. The review covered every file, and Critical and High findings are fixed or explicitly deferred
 4. A human has reviewed and merged the PR

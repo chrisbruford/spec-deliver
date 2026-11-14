@@ -1,3 +1,15 @@
+# Migrating to 4.3
+
+4.3 adds a check of the whole delivery against the whole change. In-flight deliveries resume without changes, and the conformance review runs when delivery ends.
+
+| Before | After |
+| --- | --- |
+| Each check saw one slice: the group reviewer one group, the gate the process, the lenses the diff without the spec | The deliver workflow ends with a conformance review of `approved..HEAD` against the proposal, design, specs and constraints |
+| Phase 6 matched scenarios to tests by name | The conformance review gives each scenario a verdict with evidence, and the evidence pack records it |
+| The group reviewer saw only its own diff | It also checks the work so far against `design.md`, the constraints and earlier groups |
+| `parallel-review --change` only set where the report goes | It also gives the qa and adversarial lenses the change's spec |
+| | Testable conformance findings are fixed test-first in a `conf-<sha>` group. Findings no test can prove stop as `conformance-escalate` |
+
 # Migrating to 4.2
 
 4.2 fixes groups whose tests cannot fail first, found in a mutation-testing field run. In-flight deliveries resume without changes.
