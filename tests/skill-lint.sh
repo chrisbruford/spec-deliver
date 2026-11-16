@@ -79,4 +79,8 @@ check "the plan says tests that pass today are no-test" grep -q 'mutation-killin
 check "a test fix in a group with no red step reruns it as no-test" grep -qF 'set to `no-test`' "$S"
 check "the evidence pack quotes each Gate: command log" grep -q 'evidence.log' "$S"
 
+# Found reviewing the ems bitemporal store PR: prose alone did not show the data flow or the entities.
+check "the PR body draws the change before the evidence" grep -q '## How it fits together' "$S"
+check "PR diagrams are drawn from the code" grep -q 'Draw from the code at HEAD' "$S"
+
 exit $fail

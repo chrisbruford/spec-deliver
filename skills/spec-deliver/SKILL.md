@@ -299,6 +299,16 @@ Skip this phase for `--quick`.
 
 26. **Create the pull request**. Run `gh pr view` first: if a PR already exists for this branch, push and skip to the next step. Otherwise push the branch and run `gh pr create`. Build the body from the evidence pack: summary, gate result, scenario table, review verdict, deferred items and human action items. Link the archived change.
 
+    Between the summary and the gate result, add a `## How it fits together` section with Mermaid diagrams, which GitHub renders. A reviewer should see the shape of the change before the evidence. Draw each one that the change earns:
+
+    | The change has | Diagram |
+    | --- | --- |
+    | Two or more components that pass data or calls | `flowchart`: a box per component, arrows labelled with the action and numbered in order. Split the write and read paths when both exist. Mark later work with a dashed class |
+    | New or changed tables, entities or messages | `erDiagram`: columns with type and key, and the relationships. Say when links are logical ids and not foreign keys |
+    | A multi-step path with order, locks, transactions or retries | `sequenceDiagram`: one participant per component, with `alt` and `loop` blocks where the code branches or repeats |
+
+    Draw from the code at HEAD, not from the spec or from memory. Every name, column and step must match the code. Put one sentence above each diagram that says what it shows. If no diagram earns its place, for example in a one-file fix, leave the section out. Quote labels that hold punctuation, and keep `erDiagram` attribute types to one plain word (`datetime2`). If you can render Mermaid locally, check that every block parses before you create the PR.
+
     **Local mode**: open the PR from a separate branch that has no tooling files. If `<branch>-pr` exists, run `git switch <branch>-pr`. Otherwise:
 
     ```bash

@@ -1,3 +1,11 @@
+# Migrating to 4.4
+
+4.4 adds diagrams to the PR body. In-flight deliveries resume without changes.
+
+| Before | After |
+| --- | --- |
+| The PR body held the evidence pack only | A `## How it fits together` section comes before the evidence: Mermaid `flowchart`, `erDiagram` and `sequenceDiagram` blocks for the data flow, entities and multi-step paths the change adds, drawn from the code at HEAD |
+
 # Migrating to 4.3
 
 4.3 adds a check of the whole delivery against the whole change. In-flight deliveries resume without changes, and the conformance review runs when delivery ends.
