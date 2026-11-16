@@ -12,7 +12,7 @@ You approve what gets built. Agents build it group by group, and a deterministic
 4. **Delivers each task group** in fresh context: failing tests first, then the code, then a review, then the gate. A conformance review then checks the whole delivery against the whole spec, design and goal, and sends testable gaps back through the same loop
 5. **Reviews** through specialist lenses, checking each finding against the code
 6. **Runs the final gate** and writes an evidence pack
-7. **Archives the spec and opens a PR** for a human to review and merge
+7. **Archives the spec and opens a PR** for a human to review and merge. The PR describes the end state, with diagrams of the data flow, entities and sequences the change adds, and links the evidence
 
 ## Prerequisites
 

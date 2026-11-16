@@ -255,11 +255,11 @@ If the request touches auth, payments, personal data or migrations and `--high-r
     spec-deliver-gate final --approved <approved_sha> --change <change-name>
     ```
 
-    Omit `--change` for `--quick`. If the last line is not `GATE final PASS`, report it and stop. Never report a delivery as done without this pass. If the engineer decides to proceed anyway, record that decision in the evidence pack and the PR.
+    Omit `--change` for `--quick`. If the last line is not `GATE final PASS`, report it and stop. Never report a delivery as done without this pass. If the engineer decides to proceed anyway, record that decision in the evidence pack and under Known limits in the PR body.
 
 23. **Map scenarios to tests**. Use the `conformance` verdicts from the last deliver run, including any QA run in Phase 5. Check that every `#### Scenario:` in the change's specs (or each acceptance criterion) has a verdict. A scenario that is `partial`, `not-met` or missing is a gap: report it and ask the engineer whether to deliver it or accept the gap.
 
-24. **Write the evidence pack** to `openspec/changes/<change-name>/evidence.md`, and commit it. For `--quick`, put this in the PR body instead.
+24. **Write the evidence pack** to `openspec/changes/<change-name>/evidence.md`, and commit it. For `--quick`, write it to `.config/spec-deliver/evidence.local.md` instead. Step 26 posts it as a PR comment.
 
     ```markdown
     # Evidence: <change-name>
@@ -297,7 +297,27 @@ Skip this phase for `--quick`.
 
 ### Phase 8: PR
 
-26. **Create the pull request**. Run `gh pr view` first: if a PR already exists for this branch, push and skip to the next step. Otherwise push the branch and run `gh pr create`. Build the body from the evidence pack: summary, gate result, scenario table, review verdict, deferred items and human action items. Link the archived change.
+26. **Create the pull request**. Run `gh pr view` first: if a PR already exists for this branch, push and skip to the next step. Otherwise push the branch and run `gh pr create`.
+
+    The body describes the end state: what the code does after merge. It does not tell the story of the delivery. Leave out the gate result, the groups, red to green, the scenario table, the review verdict and findings, and the fixes made on the way. The evidence pack holds them. Write these sections:
+
+    - `## Summary`: what the change adds or changes, as behaviour, schema, public surface and configuration. Name the decisions it implements, such as ADRs and specs.
+    - `## How it fits together`: the diagrams below.
+    - `## Known limits`: what the code does not do yet or does not guard against, each with its owner or ticket. Take them from the deferred findings and accepted gaps, and write each one as a fact about the code, not about the review. Write "None" when there are none.
+    - `## Action items`: steps a human must take before or after merge, from the proposal. Leave the section out when there are none.
+    - A last line that links the evidence: `Spec, design and delivery evidence: openspec/changes/archive/<dir>/`.
+
+    For `--quick`, and in local mode, the PR's diff has no `evidence.md`. After `gh pr create`, post the evidence pack as a comment with `gh pr comment <number> --body-file <evidence file>`, and edit the last line of the body to link that comment.
+
+    In `## How it fits together`, draw the Mermaid diagrams that the change earns. GitHub renders them, so a reviewer sees the shape of the change before the code:
+
+    | The change has | Diagram |
+    | --- | --- |
+    | Two or more components that pass data or calls | `flowchart`: a box per component, arrows labelled with the action and numbered in order. Split the write and read paths when both exist. Mark later work with a dashed class |
+    | New or changed tables, entities or messages | `erDiagram`: columns with type and key, and the relationships. Say when links are logical ids and not foreign keys |
+    | A multi-step path with order, locks, transactions or retries | `sequenceDiagram`: one participant per component, with `alt` and `loop` blocks where the code branches or repeats |
+
+    Draw from the code at HEAD, not from the spec or from memory. Every name, column and step must match the code. Put one sentence above each diagram that says what it shows. If no diagram earns its place, for example in a one-file fix, leave the section out. Quote labels that hold punctuation, and keep `erDiagram` attribute types to one plain word (`datetime2`). If you can render Mermaid locally, check that every block parses before you create the PR.
 
     **Local mode**: open the PR from a separate branch that has no tooling files. If `<branch>-pr` exists, run `git switch <branch>-pr`. Otherwise:
 
@@ -315,7 +335,7 @@ Skip this phase for `--quick`.
     git commit -m "<conventional commit summary of the change>"
     ```
 
-    Push `<branch>-pr` and create the PR from it. Then run `git switch <branch>`, which brings the tooling files back. The gate ran on `<branch>`, so the evidence pack in the PR body is the record.
+    Push `<branch>-pr` and create the PR from it. Then run `git switch <branch>`, which brings the tooling files back. The gate ran on `<branch>`, so the evidence pack comment is the record.
 
     Merging stays with a human. Say so in your summary.
 
