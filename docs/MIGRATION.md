@@ -1,10 +1,12 @@
 # Migrating to 4.4
 
-4.4 adds diagrams to the PR body. In-flight deliveries resume without changes.
+4.4 changes the PR body to describe the end state of the code, with diagrams. In-flight deliveries resume without changes.
 
 | Before | After |
 | --- | --- |
-| The PR body held the evidence pack only | A `## How it fits together` section comes before the evidence: Mermaid `flowchart`, `erDiagram` and `sequenceDiagram` blocks for the data flow, entities and multi-step paths the change adds, drawn from the code at HEAD |
+| The PR body was built from the evidence pack: gate result, scenario table, review verdict | The body describes the end state: Summary, How it fits together, Known limits, Action items, and a link to the evidence. The gate, scenarios and review stay in `evidence.md` |
+| | `## How it fits together` holds Mermaid `flowchart`, `erDiagram` and `sequenceDiagram` blocks for the data flow, entities and multi-step paths the change adds, drawn from the code at HEAD |
+| `--quick` and local mode put the evidence pack in the PR body | They post it as a PR comment. Add `Bash(gh pr comment:*)` to the `ask` list in `.claude/settings.local.json` |
 
 # Migrating to 4.3
 

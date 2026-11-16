@@ -82,5 +82,10 @@ check "the evidence pack quotes each Gate: command log" grep -q 'evidence.log' "
 # Found reviewing the ems bitemporal store PR: prose alone did not show the data flow or the entities.
 check "the PR body draws the change before the evidence" grep -q '## How it fits together' "$S"
 check "PR diagrams are drawn from the code" grep -q 'Draw from the code at HEAD' "$S"
+# The same PR body told the story of the delivery (gate, review findings) instead of the end state.
+check "the PR body describes the end state" grep -q 'The body describes the end state' "$S"
+check "the PR body is not built from the evidence pack" absent 'Build the body from the evidence pack' "$S"
+check "evidence outside the diff goes to a PR comment" grep -q 'gh pr comment <number> --body-file' "$S"
+check "settings ask before commenting on a PR" grep -q 'Bash(gh pr comment:\*)' "$C"
 
 exit $fail

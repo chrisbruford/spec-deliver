@@ -34,7 +34,7 @@
     │   └─ testable fixes go back through deliver as qa<n> groups
     ├─ 6 VERIFY: gate final from the main session, then the evidence pack
     ├─ 7 ARCHIVE: /opsx:archive, commit
-    └─ 8 PR: diagrams and the evidence pack in the body ← HUMAN GATE
+    └─ 8 PR: end state and diagrams in the body, evidence linked ← HUMAN GATE
 ```
 
 `--quick` skips Explore, Propose and Archive. `--signoff` runs one workflow per group, with human sign-off between groups.
